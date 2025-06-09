@@ -10,6 +10,7 @@ type Validator = {
   activatedStake: number;
   version: string;
   delinquent: boolean;
+  name: string;
 };
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
@@ -23,8 +24,14 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const filtered = useMemo(() => {
     if (!regex.trim()) return validators;
     try {
-      const r = new RegExp(regex);
-      return validators.filter((v) => r.test(v.version));
+      const r = new RegExp(regex, "i");
+      const isVersionRegex = /\d/.test(regex); // Check if regex contains a digit
+
+      if (isVersionRegex) {
+        return validators.filter((v) => r.test(v.version));
+      } else {
+        return validators.filter((v) => r.test(v.name));
+      }
     } catch {
       return validators; // invalid regex — ignore filter
     }
@@ -76,6 +83,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <thead>
             <tr className="border-b">
               {[
+                { key: "name", label: "Name" },
                 { key: "voteAccountPubkey", label: "Vote Account" },
                 { key: "identityPubkey", label: "Identity" },
                 { key: "activatedStake", label: "Stake" },
@@ -103,6 +111,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <tbody>
             {sorted.map((v) => (
               <tr key={v.voteAccountPubkey} className="border-b hover:bg-gray-50">
+                <td className="px-3 py-1">{v.name}</td>
                 <td className="px-3 py-1 font-mono">{v.voteAccountPubkey}</td>
                 <td className="px-3 py-1 font-mono">{v.identityPubkey}</td>
                 <td className="px-3 py-1 text-right">{Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 4 })}</td>
