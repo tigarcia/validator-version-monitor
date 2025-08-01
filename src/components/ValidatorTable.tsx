@@ -11,6 +11,8 @@ type Validator = {
   version: string;
   delinquent: boolean;
   name: string;
+  sfdp: boolean;
+  sfdpState: string | null;
 };
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
@@ -20,22 +22,48 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     dir: "desc",
   });
   const [regex, setRegex] = useState("");
+  const [sfdpFilter, setSfdpFilter] = useState("all");
+
+  // Get unique SFDP states for the dropdown
+  const sfdpStates = useMemo(() => {
+    const states = new Set<string>();
+    validators.forEach((v) => {
+      if (v.sfdp && v.sfdpState) {
+        states.add(v.sfdpState);
+      }
+    });
+    return Array.from(states).sort();
+  }, [validators]);
 
   const filtered = useMemo(() => {
-    if (!regex.trim()) return validators;
+    let filteredValidators = validators;
+
+    // Apply SFDP filter
+    if (sfdpFilter !== "all") {
+      if (sfdpFilter === "sfdp") {
+        filteredValidators = filteredValidators.filter((v) => v.sfdp);
+      } else if (sfdpFilter === "non-sfdp") {
+        filteredValidators = filteredValidators.filter((v) => !v.sfdp);
+      } else {
+        filteredValidators = filteredValidators.filter((v) => v.sfdpState === sfdpFilter);
+      }
+    }
+
+    // Apply regex filter
+    if (!regex.trim()) return filteredValidators;
     try {
       const r = new RegExp(regex, "i");
-      const isVersionRegex = /\d/.test(regex); // Check if regex contains a digit
+      const isVersionRegex = /\d/.test(regex);
 
       if (isVersionRegex) {
-        return validators.filter((v) => r.test(v.version));
+        return filteredValidators.filter((v) => r.test(v.version));
       } else {
-        return validators.filter((v) => r.test(v.name));
+        return filteredValidators.filter((v) => r.test(v.name));
       }
     } catch {
-      return validators; // invalid regex — ignore filter
+      return filteredValidators; // invalid regex — ignore filter
     }
-  }, [validators, regex]);
+  }, [validators, regex, sfdpFilter]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -71,6 +99,23 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
             onChange={(e) => setRegex(e.target.value)}
           />
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          SFDP Filter:
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={sfdpFilter}
+            onChange={(e) => setSfdpFilter(e.target.value)}
+          >
+            <option value="all">All Validators</option>
+            <option value="sfdp">SFDP Participants</option>
+            <option value="non-sfdp">Non-SFDP</option>
+            {sfdpStates.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="text-sm text-gray-700">
           Matching stake: <strong>{pct}%</strong>
         </div>
@@ -88,6 +133,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 { key: "identityPubkey", label: "Identity" },
                 { key: "activatedStake", label: "Stake" },
                 { key: "version", label: "Version" },
+                { key: "sfdpState", label: "SFDP State" },
                 { key: "delinquent", label: "Is Active?" },
               ].map(({ key, label }) => (
                 <th
@@ -116,6 +162,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 <td className="px-3 py-1 font-mono">{v.identityPubkey}</td>
                 <td className="px-3 py-1 text-right">{Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 4 })}</td>
                 <td className="px-3 py-1">{v.version}</td>
+                <td className="px-3 py-1 text-center">{v.sfdpState || "N/A"}</td>
                 <td className="px-3 py-1 text-center">{v.delinquent ? "🚫" : "✅"}</td>
               </tr>
             ))}
