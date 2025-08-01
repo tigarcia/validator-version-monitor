@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
+import ValidatorTableHeader from "./ValidatorTableHeader";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
 
@@ -241,39 +242,10 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
         <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
       ) : (
         <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b">
-              {[
-                { key: "name", label: "Name" },
-                { key: "voteAccountPubkey", label: "Vote Account" },
-                { key: "identityPubkey", label: "Identity" },
-                { key: "activatedStake", label: "Stake" },
-                { key: "version", label: "Version" },
-                { key: "sfdpState", label: "SFDP State" },
-                { key: "delinquent", label: "Is Active?" },
-              ].map(({ key, label }) => (
-                <th
-                  key={key}
-                  onClick={() => toggleSort(key as keyof Validator)}
-                  className={`px-3 py-2 text-left cursor-pointer select-none whitespace-nowrap ${
-                    key === "delinquent" ? "hidden lg:table-cell" : ""
-                  } ${
-                    key === "voteAccountPubkey" ? "hidden sm:table-cell" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    {label}
-                    {sortCfg.key === key && (
-                      <ArrowUpDown
-                        size={12}
-                        className={sortCfg.dir === "asc" ? "rotate-180" : ""}
-                      />
-                    )}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
+          <ValidatorTableHeader
+            sortCfg={sortCfg}
+            onSort={toggleSort}
+          />
           <tbody>
             {sorted.map((v) => (
               <ValidatorTableRow
