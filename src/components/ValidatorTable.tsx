@@ -21,8 +21,46 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     key: "activatedStake",
     dir: "desc",
   });
-  const [regex, setRegex] = useState("");
+  const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
+
+  // Get unique versions with their stake percentages
+  const versionStats = useMemo(() => {
+    const versionMap = new Map<string, number>();
+    const totalStake = validators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
+    
+    validators.forEach((v) => {
+      const version = v.version || "unknown";
+      const currentStake = versionMap.get(version) || 0;
+      versionMap.set(version, currentStake + Number(v.activatedStake || 0));
+    });
+
+    return Array.from(versionMap.entries())
+      .map(([version, stake]) => ({
+        version,
+        stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
+        stake,
+      }))
+      .sort((a, b) => {
+        // Handle "unknown" version
+        if (a.version === "unknown") return 1;
+        if (b.version === "unknown") return -1;
+        
+        // Parse semantic versions
+        const aParts = a.version.split('.').map(Number);
+        const bParts = b.version.split('.').map(Number);
+        
+        // Compare major, minor, patch
+        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+          const aPart = aParts[i] || 0;
+          const bPart = bParts[i] || 0;
+          if (aPart !== bPart) {
+            return bPart - aPart; // Changed to descending order
+          }
+        }
+        return 0;
+      });
+  }, [validators]);
 
   // Get unique SFDP states for the dropdown
   const sfdpStates = useMemo(() => {
@@ -49,21 +87,15 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       }
     }
 
-    // Apply regex filter
-    if (!regex.trim()) return filteredValidators;
-    try {
-      const r = new RegExp(regex, "i");
-      const isVersionRegex = /\d/.test(regex);
-
-      if (isVersionRegex) {
-        return filteredValidators.filter((v) => r.test(v.version));
-      } else {
-        return filteredValidators.filter((v) => r.test(v.name));
-      }
-    } catch {
-      return filteredValidators; // invalid regex — ignore filter
+    // Apply version filter
+    if (selectedVersions.size > 0) {
+      filteredValidators = filteredValidators.filter((v) => 
+        selectedVersions.has(v.version || "unknown")
+      );
     }
-  }, [validators, regex, sfdpFilter]);
+
+    return filteredValidators;
+  }, [validators, selectedVersions, sfdpFilter]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -87,18 +119,39 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     );
   };
 
+  const toggleVersion = (version: string) => {
+    setSelectedVersions((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(version)) {
+        newSet.delete(version);
+      } else {
+        newSet.add(version);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <div className="bg-white p-4 rounded-2xl shadow">
       <div className="flex flex-wrap items-center gap-4 mb-4">
-        <label className="flex items-center gap-2 text-sm">
-          Version regex:
-          <input
-            className="border rounded px-2 py-1 text-sm"
-            placeholder="1\\.18\\..*"
-            value={regex}
-            onChange={(e) => setRegex(e.target.value)}
-          />
-        </label>
+        <div className="flex items-center gap-2 text-sm">
+          <span>Version Filter:</span>
+          <div className="flex flex-col gap-1 border rounded p-2">
+            {versionStats.map(({ version, stakePercentage }) => (
+              <label key={version} className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={selectedVersions.has(version)}
+                  onChange={() => toggleVersion(version)}
+                  className="rounded"
+                />
+                <span className="whitespace-nowrap">
+                  {version} ({stakePercentage}%)
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           SFDP Filter:
           <select
