@@ -142,6 +142,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
+    setShowVersionFilter(false);
   };
 
   return (
