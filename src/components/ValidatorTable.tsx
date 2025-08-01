@@ -23,6 +23,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   });
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
+  const [showVersionFilter, setShowVersionFilter] = useState(false);
 
   // Get unique versions with their stake percentages
   const versionStats = useMemo(() => {
@@ -146,22 +147,15 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           Clear All Filters
         </button>
         <div className="flex items-center gap-2 text-sm">
-          <span>Version Filter:</span>
-          <div className="flex flex-col gap-1 border rounded p-2">
-            {versionStats.map(({ version, stakePercentage }) => (
-              <label key={version} className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={selectedVersions.has(version)}
-                  onChange={() => toggleVersion(version)}
-                  className="rounded"
-                />
-                <span className="whitespace-nowrap">
-                  {version} ({stakePercentage}%)
-                </span>
-              </label>
-            ))}
-          </div>
+          <button
+            onClick={() => setShowVersionFilter(!showVersionFilter)}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors flex items-center gap-1"
+          >
+            <span>Version Filter</span>
+            <span className={`transition-transform duration-200 ${showVersionFilter ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </button>
         </div>
         <label className="flex items-center gap-2 text-sm">
           SFDP Filter:
@@ -184,6 +178,26 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           Matching stake: <strong>{pct}%</strong>
         </div>
       </div>
+
+      {showVersionFilter && (
+        <div className="bg-gray-50 border rounded-lg p-3 mb-4 transition-all duration-200">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+            {versionStats.map(({ version, stakePercentage }) => (
+              <label key={version} className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={selectedVersions.has(version)}
+                  onChange={() => toggleVersion(version)}
+                  className="rounded"
+                />
+                <span className="whitespace-nowrap">
+                  {version} ({stakePercentage}%)
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
