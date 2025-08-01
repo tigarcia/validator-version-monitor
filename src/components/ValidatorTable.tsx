@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { ArrowUpDown } from "lucide-react";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
@@ -24,6 +24,15 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(0);
+
+  // Handle window resize for custom breakpoint
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    handleResize(); // Set initial width
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Get unique versions with their stake percentages
   const versionStats = useMemo(() => {
@@ -281,10 +290,10 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                   {v.name}
                 </td>
                 <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={v.voteAccountPubkey}>
-                  {v.voteAccountPubkey}
+                  {windowWidth >= 1400 ? v.voteAccountPubkey : v.voteAccountPubkey.substring(0, 20) + '...'}
                 </td>
                 <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={v.identityPubkey}>
-                  {v.identityPubkey}
+                  {windowWidth >= 1400 ? v.identityPubkey : v.identityPubkey.substring(0, 20) + '...'}
                 </td>
                 <td className="px-3 py-1 text-right">
                   {Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
