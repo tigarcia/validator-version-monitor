@@ -121,6 +121,14 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const filteredStake = filtered.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
   const pct = totalStake ? ((filteredStake / totalStake) * 100).toFixed(2) : "0.00";
 
+  // Calculate total SFDP stake
+  const totalSfdpStake = useMemo(() => {
+    const sfdpValidators = validators.filter((v) => v.sfdp);
+    return sfdpValidators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
+  }, [validators]);
+
+  const sfdpStakePercentage = totalStake ? ((totalSfdpStake / totalStake) * 100).toFixed(2) : "0.00";
+
   const toggleSort = (key: keyof Validator) => {
     setSortCfg((prev) =>
       prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" }
@@ -184,6 +192,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
         </label>
         <div className="text-sm text-gray-700">
           Matching stake: <strong>{pct}%</strong>
+          {sfdpFilter !== "all" && (
+            <span className="ml-4">
+              | Total SFDP stake: <strong>{sfdpStakePercentage}%</strong>
+            </span>
+          )}
         </div>
       </div>
 
