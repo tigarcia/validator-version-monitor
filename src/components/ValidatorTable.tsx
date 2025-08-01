@@ -286,7 +286,10 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={v.identityPubkey}>
                   {v.identityPubkey}
                 </td>
-                <td className="px-3 py-1 text-right">{Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 4 })}</td>
+                <td className="px-3 py-1 text-right">
+                  {Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+                  ({((Number(v.activatedStake) / totalStake) * 100).toFixed(2)}%)
+                </td>
                 <td className="px-3 py-1">{v.version}</td>
                 <td className="px-3 py-1 text-center">{v.sfdpState || "N/A"}</td>
                 <td className="px-3 py-1 text-center hidden lg:table-cell">{v.delinquent ? "🚫" : "✅"}</td>
