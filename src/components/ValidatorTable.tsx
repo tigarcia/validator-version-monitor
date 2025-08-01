@@ -1,19 +1,10 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
 import { ArrowUpDown } from "lucide-react";
+import { Validator } from "../types/validator";
+import ValidatorTableRow from "./ValidatorTableRow";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
-
-type Validator = {
-  voteAccountPubkey: string;
-  identityPubkey: string;
-  activatedStake: number;
-  version: string;
-  delinquent: boolean;
-  name: string;
-  sfdp: boolean;
-  sfdpState: string | null;
-};
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const [validators] = useState<Validator[]>(initialData);
@@ -285,24 +276,12 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           </thead>
           <tbody>
             {sorted.map((v) => (
-              <tr key={v.voteAccountPubkey} className="border-b hover:bg-gray-50">
-                <td className="px-3 py-1 max-w-[200px] sm:max-w-[150px] truncate" title={v.name}>
-                  {v.name}
-                </td>
-                <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={v.voteAccountPubkey}>
-                  {windowWidth >= 1400 ? v.voteAccountPubkey : v.voteAccountPubkey.substring(0, 20) + '...'}
-                </td>
-                <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={v.identityPubkey}>
-                  {windowWidth >= 1400 ? v.identityPubkey : v.identityPubkey.substring(0, 20) + '...'}
-                </td>
-                <td className="px-3 py-1 text-right">
-                  {Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                  ({((Number(v.activatedStake) / totalStake) * 100).toFixed(2)}%)
-                </td>
-                <td className="px-3 py-1">{v.version}</td>
-                <td className="px-3 py-1 text-center">{v.sfdpState || "N/A"}</td>
-                <td className="px-3 py-1 text-center hidden lg:table-cell">{v.delinquent ? "🚫" : "✅"}</td>
-              </tr>
+              <ValidatorTableRow
+                key={v.voteAccountPubkey}
+                validator={v}
+                totalStake={totalStake}
+                windowWidth={windowWidth}
+              />
             ))}
           </tbody>
         </table>
