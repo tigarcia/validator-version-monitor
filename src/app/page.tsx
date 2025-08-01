@@ -52,7 +52,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-8 py-4">
-      <h1 className="text-3xl font-bold mb-4">Solana Validator Explorer (SSR demo)</h1>
+      <h1 className="text-3xl font-bold mb-4">Solana Version Explorer</h1>
       <ValidatorTable initialData={enrichedValidators} />
     </main>
   );

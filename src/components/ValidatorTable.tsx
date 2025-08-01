@@ -131,9 +131,20 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     });
   };
 
+  const clearAllFilters = () => {
+    setSelectedVersions(new Set());
+    setSfdpFilter("all");
+  };
+
   return (
     <div className="bg-white p-4 rounded-2xl shadow">
       <div className="flex flex-wrap items-center gap-4 mb-4">
+        <button
+          onClick={clearAllFilters}
+          className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+        >
+          Clear All Filters
+        </button>
         <div className="flex items-center gap-2 text-sm">
           <span>Version Filter:</span>
           <div className="flex flex-col gap-1 border rounded p-2">
@@ -192,7 +203,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 <th
                   key={key}
                   onClick={() => toggleSort(key as keyof Validator)}
-                  className="px-3 py-2 text-left cursor-pointer select-none whitespace-nowrap"
+                  className={`px-3 py-2 text-left cursor-pointer select-none whitespace-nowrap ${
+                    key === "delinquent" ? "hidden lg:table-cell" : ""
+                  } ${
+                    key === "voteAccountPubkey" ? "hidden sm:table-cell" : ""
+                  }`}
                 >
                   <div className="flex items-center gap-1">
                     {label}
@@ -210,13 +225,19 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <tbody>
             {sorted.map((v) => (
               <tr key={v.voteAccountPubkey} className="border-b hover:bg-gray-50">
-                <td className="px-3 py-1">{v.name}</td>
-                <td className="px-3 py-1 font-mono">{v.voteAccountPubkey}</td>
-                <td className="px-3 py-1 font-mono">{v.identityPubkey}</td>
+                <td className="px-3 py-1 max-w-[200px] sm:max-w-[150px] truncate" title={v.name}>
+                  {v.name}
+                </td>
+                <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={v.voteAccountPubkey}>
+                  {v.voteAccountPubkey}
+                </td>
+                <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={v.identityPubkey}>
+                  {v.identityPubkey}
+                </td>
                 <td className="px-3 py-1 text-right">{Number(v.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 4 })}</td>
                 <td className="px-3 py-1">{v.version}</td>
                 <td className="px-3 py-1 text-center">{v.sfdpState || "N/A"}</td>
-                <td className="px-3 py-1 text-center">{v.delinquent ? "🚫" : "✅"}</td>
+                <td className="px-3 py-1 text-center hidden lg:table-cell">{v.delinquent ? "🚫" : "✅"}</td>
               </tr>
             ))}
           </tbody>
