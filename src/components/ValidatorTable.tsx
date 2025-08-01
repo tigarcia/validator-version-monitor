@@ -36,7 +36,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       versionMap.set(version, currentStake + Number(v.activatedStake || 0));
     });
 
-    return Array.from(versionMap.entries())
+    const sortedVersions = Array.from(versionMap.entries())
       .map(([version, stake]) => ({
         version,
         stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
@@ -56,11 +56,18 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           const aPart = aParts[i] || 0;
           const bPart = bParts[i] || 0;
           if (aPart !== bPart) {
-            return bPart - aPart; // Changed to descending order
+            return bPart - aPart; // Descending order
           }
         }
         return 0;
       });
+
+    // Split into two columns - first column gets higher versions
+    const midPoint = Math.ceil(sortedVersions.length / 2);
+    const column1 = sortedVersions.slice(0, midPoint);
+    const column2 = sortedVersions.slice(midPoint);
+
+    return { column1, column2 };
   }, [validators]);
 
   // Get unique SFDP states for the dropdown
@@ -181,20 +188,37 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
 
       {showVersionFilter && (
         <div className="bg-gray-50 border rounded-lg p-3 mb-4 transition-all duration-200">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            {versionStats.map(({ version, stakePercentage }) => (
-              <label key={version} className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={selectedVersions.has(version)}
-                  onChange={() => toggleVersion(version)}
-                  className="rounded"
-                />
-                <span className="whitespace-nowrap">
-                  {version} ({stakePercentage}%)
-                </span>
-              </label>
-            ))}
+          <div className="flex gap-8">
+            <div className="flex flex-col gap-1">
+              {versionStats.column1.map(({ version, stakePercentage }) => (
+                <label key={version} className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedVersions.has(version)}
+                    onChange={() => toggleVersion(version)}
+                    className="rounded"
+                  />
+                  <span className="whitespace-nowrap">
+                    {version} ({stakePercentage}%)
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-col gap-1">
+              {versionStats.column2.map(({ version, stakePercentage }) => (
+                <label key={version} className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedVersions.has(version)}
+                    onChange={() => toggleVersion(version)}
+                    className="rounded"
+                  />
+                  <span className="whitespace-nowrap">
+                    {version} ({stakePercentage}%)
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       )}
