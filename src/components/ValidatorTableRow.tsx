@@ -1,4 +1,6 @@
 import { Validator } from "../types/validator";
+import { copyToClipboard } from "../utils/copyToClipboard";
+import { Copy } from "lucide-react";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
 
@@ -6,19 +8,55 @@ interface ValidatorTableRowProps {
   validator: Validator;
   totalStake: number;
   windowWidth: number;
+  onCopySuccess: (message: string) => void;
+  onCopyError: (message: string) => void;
 }
 
-export default function ValidatorTableRow({ validator, totalStake, windowWidth }: ValidatorTableRowProps) {
+export default function ValidatorTableRow({
+  validator,
+  totalStake,
+  windowWidth,
+  onCopySuccess,
+  onCopyError
+}: ValidatorTableRowProps) {
+
+  const handleCopy = async (text: string, label: string) => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      onCopySuccess(`${label} copied to clipboard`);
+    } else {
+      onCopyError(`Failed to copy ${label}`);
+    }
+  };
+
   return (
     <tr className="border-b hover:bg-gray-50">
       <td className="px-3 py-1 max-w-[200px] sm:max-w-[150px] truncate" title={validator.name}>
         {validator.name}
       </td>
-      <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={validator.identityPubkey}>
-        {windowWidth >= 1400 ? validator.identityPubkey : validator.identityPubkey.substring(0, 20) + '...'}
+      <td
+        className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate cursor-pointer hover:bg-gray-100 transition-colors"
+        title="Copy"
+        onClick={() => handleCopy(validator.identityPubkey, "Identity")}
+      >
+        <div className="flex items-center gap-1">
+          <span>
+            {validator.identityPubkey.substring(0, 10)}...
+          </span>
+          <Copy size={12} className="text-gray-400 hover:text-gray-600" />
+        </div>
       </td>
-      <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={validator.voteAccountPubkey}>
-        {windowWidth >= 1400 ? validator.voteAccountPubkey : validator.voteAccountPubkey.substring(0, 20) + '...'}
+      <td
+        className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell cursor-pointer hover:bg-gray-100 transition-colors"
+        title="Copy"
+        onClick={() => handleCopy(validator.voteAccountPubkey, "Vote Account")}
+      >
+        <div className="flex items-center gap-1">
+          <span>
+            {validator.voteAccountPubkey.substring(0, 10)}...
+          </span>
+          <Copy size={12} className="text-gray-400 hover:text-gray-600" />
+        </div>
       </td>
       <td className="px-3 py-1 text-right">
         {Number(validator.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}

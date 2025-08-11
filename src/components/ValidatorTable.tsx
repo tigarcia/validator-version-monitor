@@ -4,6 +4,7 @@ import { ArrowUpDown } from "lucide-react";
 import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
+import CopyNotification from "./CopyNotification";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
 
@@ -17,6 +18,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
   const [windowWidth, setWindowWidth] = useState(0);
+  const [copyNotification, setCopyNotification] = useState<{
+    message: string;
+    isVisible: boolean;
+    isError: boolean;
+  }>({ message: "", isVisible: false, isError: false });
 
   // Handle window resize for custom breakpoint
   useEffect(() => {
@@ -25,6 +31,18 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const handleCopySuccess = (message: string) => {
+    setCopyNotification({ message, isVisible: true, isError: false });
+  };
+
+  const handleCopyError = (message: string) => {
+    setCopyNotification({ message, isVisible: true, isError: true });
+  };
+
+  const hideCopyNotification = () => {
+    setCopyNotification(prev => ({ ...prev, isVisible: false }));
+  };
 
   // Get unique versions with their stake percentages
   const versionStats = useMemo(() => {
@@ -253,11 +271,19 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 validator={v}
                 totalStake={totalStake}
                 windowWidth={windowWidth}
+                onCopySuccess={handleCopySuccess}
+                onCopyError={handleCopyError}
               />
             ))}
           </tbody>
         </table>
       )}
+      <CopyNotification
+        message={copyNotification.message}
+        isVisible={copyNotification.isVisible}
+        isError={copyNotification.isError}
+        onHide={hideCopyNotification}
+      />
     </div>
   );
 }
