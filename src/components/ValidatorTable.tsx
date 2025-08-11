@@ -130,8 +130,8 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
 
   // Calculate total SFDP stake
   const totalSfdpStake = useMemo(() => {
-    const sfdpValidators = validators.filter((v) => v.sfdp);
-    return sfdpValidators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
+    const approvedSfdpValidators = validators.filter((v) => v.sfdp && v.sfdpState === "Approved");
+    return approvedSfdpValidators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
   }, [validators]);
 
   const sfdpStakePercentage = totalStake ? ((totalSfdpStake / totalStake) * 100).toFixed(2) : "0.00";
