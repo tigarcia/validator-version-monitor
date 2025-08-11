@@ -1,12 +1,24 @@
 import fs from "fs/promises";
 import path from "path";
 import ValidatorTable from "../components/ValidatorTable";
+import { Validator } from "../types/validator";
+
+interface StakewizValidator {
+  vote_identity: string;
+  name: string;
+}
+
+interface SfdpParticipant {
+  mainnetBetaPubkey: string;
+  state: string;
+  name: string;
+}
 
 export default async function Home() {
   const filePath = path.join(process.cwd(), "data", "validators.json");
-  let validators: any[] = [];
-  let stakewizData: any[] = [];
-  let sfdpData: any[] = [];
+  let validators: Validator[] = [];
+  let stakewizData: StakewizValidator[] = [];
+  let sfdpData: SfdpParticipant[] = [];
 
   try {
     const raw = await fs.readFile(filePath, "utf-8");

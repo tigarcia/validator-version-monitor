@@ -1,12 +1,9 @@
 "use client";
-import React, { useMemo, useState, useEffect } from "react";
-import { ArrowUpDown } from "lucide-react";
+import React, { useMemo, useState } from "react";
 import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
-
-const LAMPORTS_PER_SOL = 10 ** 9;
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const [validators] = useState<Validator[]>(initialData);
@@ -17,20 +14,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
   const [copyNotification, setCopyNotification] = useState<{
     message: string;
     isVisible: boolean;
     isError: boolean;
   }>({ message: "", isVisible: false, isError: false });
-
-  // Handle window resize for custom breakpoint
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    handleResize(); // Set initial width
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const handleCopySuccess = (message: string) => {
     setCopyNotification({ message, isVisible: true, isError: false });
@@ -127,8 +115,8 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const sorted = useMemo(() => {
     const list = [...filtered];
     list.sort((a, b) => {
-      const av: any = a[sortCfg.key] ?? "";
-      const bv: any = b[sortCfg.key] ?? "";
+      const av = a[sortCfg.key] ?? "";
+      const bv = b[sortCfg.key] ?? "";
       if (av < bv) return sortCfg.dir === "asc" ? -1 : 1;
       if (av > bv) return sortCfg.dir === "asc" ? 1 : -1;
       return 0;
@@ -270,7 +258,6 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 key={v.voteAccountPubkey}
                 validator={v}
                 totalStake={totalStake}
-                windowWidth={windowWidth}
                 onCopySuccess={handleCopySuccess}
                 onCopyError={handleCopyError}
               />

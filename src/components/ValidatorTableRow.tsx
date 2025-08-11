@@ -7,7 +7,6 @@ const LAMPORTS_PER_SOL = 10 ** 9;
 interface ValidatorTableRowProps {
   validator: Validator;
   totalStake: number;
-  windowWidth: number;
   onCopySuccess: (message: string) => void;
   onCopyError: (message: string) => void;
 }
@@ -15,7 +14,6 @@ interface ValidatorTableRowProps {
 export default function ValidatorTableRow({
   validator,
   totalStake,
-  windowWidth,
   onCopySuccess,
   onCopyError
 }: ValidatorTableRowProps) {
