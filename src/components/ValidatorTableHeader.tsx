@@ -9,8 +9,8 @@ interface ValidatorTableHeaderProps {
 export default function ValidatorTableHeader({ sortCfg, onSort }: ValidatorTableHeaderProps) {
   const columns = [
     { key: "name", label: "Name" },
-    { key: "voteAccountPubkey", label: "Vote Account" },
     { key: "identityPubkey", label: "Identity" },
+    { key: "voteAccountPubkey", label: "Vote Account" },
     { key: "activatedStake", label: "Stake" },
     { key: "version", label: "Version" },
     { key: "sfdpState", label: "SFDP State" },

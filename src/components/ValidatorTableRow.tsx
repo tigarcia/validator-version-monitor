@@ -14,11 +14,11 @@ export default function ValidatorTableRow({ validator, totalStake, windowWidth }
       <td className="px-3 py-1 max-w-[200px] sm:max-w-[150px] truncate" title={validator.name}>
         {validator.name}
       </td>
-      <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={validator.voteAccountPubkey}>
-        {windowWidth >= 1400 ? validator.voteAccountPubkey : validator.voteAccountPubkey.substring(0, 20) + '...'}
-      </td>
       <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate" title={validator.identityPubkey}>
         {windowWidth >= 1400 ? validator.identityPubkey : validator.identityPubkey.substring(0, 20) + '...'}
+      </td>
+      <td className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell" title={validator.voteAccountPubkey}>
+        {windowWidth >= 1400 ? validator.voteAccountPubkey : validator.voteAccountPubkey.substring(0, 20) + '...'}
       </td>
       <td className="px-3 py-1 text-right">
         {Number(validator.activatedStake / LAMPORTS_PER_SOL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
