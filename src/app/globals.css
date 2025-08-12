@@ -24,3 +24,45 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Force light mode colors regardless of user theme preferences */
+* {
+  color: #171717 !important;
+}
+
+/* Ensure proper contrast for all text elements */
+h1, h2, h3, h4, h5, h6, p, span, div, label, th, td, button, select, input {
+  color: #171717 !important;
+}
+
+/* Specific overrides for interactive elements */
+button:not([class*="bg-blue"]) {
+  background-color: #f3f4f6 !important;
+  color: #171717 !important;
+}
+
+button[class*="bg-blue"] {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+/* Table specific overrides */
+table th, table td {
+  color: #171717 !important;
+}
+
+/* Filter elements */
+select, input {
+  background-color: #ffffff !important;
+  color: #171717 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Ensure copy icons are visible */
+svg {
+  color: #6b7280 !important;
+}
+
+svg:hover {
+  color: #374151 !important;
+}

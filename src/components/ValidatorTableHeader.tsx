@@ -24,7 +24,7 @@ export default function ValidatorTableHeader({ sortCfg, onSort }: ValidatorTable
           <th
             key={key}
             onClick={() => onSort(key as keyof Validator)}
-            className={`px-3 py-2 text-left cursor-pointer select-none whitespace-nowrap ${
+            className={`px-3 py-2 text-left cursor-pointer select-none whitespace-nowrap text-gray-900 ${
               key === "delinquent" ? "hidden lg:table-cell" : ""
             } ${
               key === "voteAccountPubkey" ? "hidden sm:table-cell" : ""
@@ -35,7 +35,7 @@ export default function ValidatorTableHeader({ sortCfg, onSort }: ValidatorTable
               {sortCfg.key === key && (
                 <ArrowUpDown
                   size={12}
-                  className={sortCfg.dir === "asc" ? "rotate-180" : ""}
+                  className={`${sortCfg.dir === "asc" ? "rotate-180" : ""} text-gray-900`}
                 />
               )}
             </div>

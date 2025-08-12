@@ -161,7 +161,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   };
 
   return (
-    <div className="bg-white p-4 rounded-2xl shadow">
+    <div className="bg-white p-4 rounded-2xl shadow text-gray-900">
       <div className="flex flex-wrap items-center gap-4 mb-4">
         <button
           onClick={clearAllFilters}
@@ -169,10 +169,10 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
         >
           Clear All Filters
         </button>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm text-gray-900">
           <button
             onClick={() => setShowVersionFilter(!showVersionFilter)}
-            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded transition-colors flex items-center gap-1"
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors flex items-center gap-1"
           >
             <span>Version Filter</span>
             <span className={`transition-transform duration-200 ${showVersionFilter ? 'rotate-180' : ''}`}>
@@ -180,10 +180,10 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
             </span>
           </button>
         </div>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-gray-900">
           SFDP Filter:
           <select
-            className="border rounded px-2 py-1 text-sm"
+            className="border rounded px-2 py-1 text-sm bg-white text-gray-900"
             value={sfdpFilter}
             onChange={(e) => setSfdpFilter(e.target.value)}
           >
@@ -212,7 +212,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <div className="flex gap-8">
             <div className="flex flex-col gap-1">
               {versionStats.column1.map(({ version, stakePercentage }) => (
-                <label key={version} className="flex items-center gap-2 text-xs">
+                <label key={version} className="flex items-center gap-2 text-xs text-gray-900">
                   <input
                     type="checkbox"
                     checked={selectedVersions.has(version)}
@@ -227,7 +227,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
             </div>
             <div className="flex flex-col gap-1">
               {versionStats.column2.map(({ version, stakePercentage }) => (
-                <label key={version} className="flex items-center gap-2 text-xs">
+                <label key={version} className="flex items-center gap-2 text-xs text-gray-900">
                   <input
                     type="checkbox"
                     checked={selectedVersions.has(version)}
@@ -247,7 +247,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
       ) : (
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm text-gray-900">
           <ValidatorTableHeader
             sortCfg={sortCfg}
             onSort={toggleSort}
