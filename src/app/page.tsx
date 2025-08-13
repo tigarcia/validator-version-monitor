@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import ValidatorTable from "../components/ValidatorTable";
 import { Validator } from "../types/validator";
+import Link from "next/link";
 
 interface StakewizValidator {
   vote_identity: string;
@@ -64,7 +65,15 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-gray-100 px-8 py-4">
-      <h1 className="text-3xl font-bold mb-4">Solana Version Explorer</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-3xl font-bold text-gray-900">Solana Validator Explorer (SSR demo)</h1>
+        <Link
+          href="/convert"
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+        >
+          Key Converter
+        </Link>
+      </div>
       <ValidatorTable initialData={enrichedValidators} />
     </main>
   );
