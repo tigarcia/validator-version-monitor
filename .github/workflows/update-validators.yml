@@ -1,0 +1,37 @@
+name: Update validators.json
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # every hour (UTC)
+  workflow_dispatch:       # allow manual runs
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Solana CLI
+        run: |
+          SOLANA_VERSION=v3.0.6
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.0.6/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Generate validators.json
+        run: |
+          solana -um validators --output json-compact > validators.json
+
+      - name: Commit and push if changed
+        run: |
+          if [[ -n "$(git status --porcelain validators.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add validators.json
+            git commit -m "update validators.json $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            git push
+          else
+            echo "No changes; skipping commit."
+          fi
