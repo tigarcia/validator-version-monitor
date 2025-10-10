@@ -22,14 +22,14 @@ jobs:
 
       - name: Generate validators.json
         run: |
-          solana -um validators --output json-compact > validators.json
+          solana -um validators --output json-compact > data/validators.json
 
       - name: Commit and push if changed
         run: |
           if [[ -n "$(git status --porcelain validators.json)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add validators.json
+            git add data/validators.json
             git commit -m "update validators.json $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             git push
           else
