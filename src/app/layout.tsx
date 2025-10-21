@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Solana Version Explorer",
-  description: "Explore Solana validators and their software versions",
+  title: "Solana Version Monitor",
+  description: "Monitor Solana validators and their software versions",
 };
 
 export default function RootLayout({
