@@ -1,11 +1,14 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [validators] = useState<Validator[]>(initialData);
   const [sortCfg, setSortCfg] = useState<{ key: keyof Validator; dir: "asc" | "desc" }>({
     key: "activatedStake",
@@ -31,6 +34,46 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const hideCopyNotification = () => {
     setCopyNotification(prev => ({ ...prev, isVisible: false }));
   };
+
+  // Initialize filters from URL parameters
+  useEffect(() => {
+    const versions = searchParams.get('versions');
+    const sfdp = searchParams.get('sfdp');
+    const sort = searchParams.get('sort');
+    const sortDir = searchParams.get('sortDir');
+
+    if (versions) {
+      setSelectedVersions(new Set(versions.split(',')));
+    }
+    if (sfdp) {
+      setSfdpFilter(sfdp);
+    }
+    if (sort && sortDir) {
+      setSortCfg({ key: sort as keyof Validator, dir: sortDir as "asc" | "desc" });
+    }
+  }, [searchParams]);
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (selectedVersions.size > 0) {
+      params.set('versions', Array.from(selectedVersions).join(','));
+    }
+    if (sfdpFilter !== 'all') {
+      params.set('sfdp', sfdpFilter);
+    }
+    if (sortCfg.key !== 'activatedStake' || sortCfg.dir !== 'desc') {
+      params.set('sort', sortCfg.key);
+      params.set('sortDir', sortCfg.dir);
+    }
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `?${queryString}` : '';
+
+    // Update URL without causing a page reload
+    window.history.replaceState({}, '', newUrl);
+  }, [selectedVersions, sfdpFilter, sortCfg]);
 
   // Get unique versions with their stake percentages
   const versionStats = useMemo(() => {

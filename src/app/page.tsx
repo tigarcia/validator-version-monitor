@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { Suspense } from "react";
 import ValidatorTable from "../components/ValidatorTable";
 import { Validator } from "../types/validator";
 import Link from "next/link";
@@ -74,7 +75,9 @@ export default async function Home() {
           Key Converter
         </Link>
       </div>
-      <ValidatorTable initialData={enrichedValidators} />
+      <Suspense fallback={<div className="text-center text-gray-500">Loading...</div>}>
+        <ValidatorTable initialData={enrichedValidators} />
+      </Suspense>
     </main>
   );
 }
