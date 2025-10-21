@@ -1,13 +1,12 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [validators] = useState<Validator[]>(initialData);
   const [sortCfg, setSortCfg] = useState<{ key: keyof Validator; dir: "asc" | "desc" }>({
@@ -44,6 +43,8 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
 
     if (versions) {
       setSelectedVersions(new Set(versions.split(',')));
+      // Show version filter if versions are selected in URL
+      setShowVersionFilter(true);
     }
     if (sfdp) {
       setSfdpFilter(sfdp);
