@@ -201,6 +201,8 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     setSelectedVersions(new Set());
     setSfdpFilter("all");
     setShowVersionFilter(false);
+    // Clear URL parameters
+    window.history.replaceState({}, '', window.location.pathname);
   };
 
   return (
