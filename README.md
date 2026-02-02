@@ -1,30 +1,143 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Solana Validator Version Monitor
+
+A Next.js web application for monitoring Solana validators, their software versions, stake distribution, and SFDP participation status.
+
+## Features
+
+- **Real-time Validator Data**: Displays comprehensive information about Solana mainnet validators
+- **Multi-source Data Enrichment**: Combines data from:
+  - Solana RPC (validator info, versions, stake)
+  - [Stakewiz API](https://stakewiz.com) (validator names)
+  - [Solana Foundation Delegation Program (SFDP)](https://solana.org/delegation-program) API (participation status)
+- **Advanced Filtering**:
+  - Filter by software version with stake percentage breakdown
+  - Filter by SFDP participation status
+  - URL-based state management for shareable filtered views
+- **Sortable Columns**: Sort by stake, version, name, or any other field
+- **Key Converter Tool**: Convert between identity and vote account public keys
+- **Automatic Updates**: GitHub Actions workflow updates validator data hourly
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Installation
+
+```bash
+npm install
+```
+
+### Development
+
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Build for production:
 
-## Learn More
+```bash
+npm run build
+npm start
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Linting
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── page.tsx                    # Main validator table page
+│   ├── convert/page.tsx            # Key converter utility
+│   ├── api/validators/route.ts     # API endpoint for validator data
+│   └── layout.tsx                  # Root layout
+├── components/
+│   ├── ValidatorTable.tsx          # Main table with filtering/sorting
+│   ├── ValidatorTableRow.tsx       # Individual validator row
+│   ├── ValidatorTableHeader.tsx    # Table header with sort controls
+│   └── CopyNotification.tsx        # Toast notification component
+├── types/
+│   └── validator.ts                # TypeScript type definitions
+└── utils/
+    └── copyToClipboard.ts          # Clipboard utility
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+data/
+└── validators.json                 # Auto-generated validator data
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## How It Works
+
+### Data Pipeline
+
+1. **Automated Collection**: A GitHub Actions workflow (`.github/workflows/update-validators.yml`) runs hourly to:
+   - Install Solana CLI
+   - Execute `solana -um validators --output json-compact`
+   - Commit updated `data/validators.json` to the repository
+
+2. **Data Enrichment**: When the app loads, it:
+   - Reads `data/validators.json`
+   - Fetches validator names from Stakewiz API
+   - Fetches SFDP participation data from Solana Foundation API
+   - Merges all data sources into a unified view
+
+3. **Client-side Features**: The `ValidatorTable` component provides:
+   - Real-time filtering and sorting
+   - URL state persistence for sharing views
+   - Stake percentage calculations
+   - Copy-to-clipboard functionality
+
+### Key Converter
+
+The `/convert` page allows you to:
+- Paste a list of identity OR vote account public keys
+- Automatically detect the key type
+- Convert all keys to the opposite type
+- Copy the converted keys
+
+Perfect for working with validator lists that need different key formats.
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **React**: 19.2.1
+- **Language**: TypeScript 5
+- **Styling**: Tailwind CSS 4
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+
+## API Endpoints
+
+### `GET /api/validators`
+
+Returns enriched validator data with names and SFDP status.
+
+**Response**: Array of validator objects with:
+- `voteAccountPubkey`: Vote account public key
+- `identityPubkey`: Identity public key
+- `activatedStake`: Stake amount in lamports
+- `version`: Solana software version
+- `delinquent`: Whether validator is delinquent
+- `name`: Validator name (from Stakewiz)
+- `sfdp`: SFDP participation status
+- `sfdpState`: SFDP state (e.g., "Approved")
+
+## Contributing
+
+This is a monitoring tool for the Solana ecosystem. Contributions welcome!
+
+## License
+
+MIT
