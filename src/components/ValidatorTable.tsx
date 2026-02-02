@@ -5,6 +5,7 @@ import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
+import { getMinorVersionGroup } from "../utils/versionParser";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const searchParams = useSearchParams();
@@ -76,49 +77,75 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     window.history.replaceState({}, '', newUrl);
   }, [selectedVersions, sfdpFilter, sortCfg]);
 
-  // Get unique versions with their stake percentages
+  // Get unique versions with their stake percentages, including groups
   const versionStats = useMemo(() => {
     const versionMap = new Map<string, number>();
+    const groupMap = new Map<string, Set<string>>(); // group -> set of versions
     const totalStake = validators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
-    
+
+    // Build version stake map and group membership
     validators.forEach((v) => {
       const version = v.version || "unknown";
-      const currentStake = versionMap.get(version) || 0;
-      versionMap.set(version, currentStake + Number(v.activatedStake || 0));
+      const stake = Number(v.activatedStake || 0);
+
+      versionMap.set(version, (versionMap.get(version) || 0) + stake);
+
+      // Add to group
+      const group = getMinorVersionGroup(version);
+      if (!groupMap.has(group)) {
+        groupMap.set(group, new Set());
+      }
+      groupMap.get(group)!.add(version);
     });
 
-    const sortedVersions = Array.from(versionMap.entries())
-      .map(([version, stake]) => ({
+    // Build group data with individual versions
+    const groups = Array.from(groupMap.entries()).map(([group, versions]) => {
+      const stake = Array.from(versions).reduce((sum, v) => sum + (versionMap.get(v) || 0), 0);
+
+      // Build individual version stats for this group
+      const individualVersions = Array.from(versions).map(version => ({
         version,
-        stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
-        stake,
-      }))
-      .sort((a, b) => {
-        // Handle "unknown" version
+        stakePercentage: totalStake ? ((versionMap.get(version)! / totalStake) * 100).toFixed(2) : "0.00",
+        stake: versionMap.get(version)!
+      })).sort((a, b) => {
+        // Sort individuals within group
         if (a.version === "unknown") return 1;
         if (b.version === "unknown") return -1;
-        
-        // Parse semantic versions
         const aParts = a.version.split('.').map(Number);
         const bParts = b.version.split('.').map(Number);
-        
-        // Compare major, minor, patch
         for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
           const aPart = aParts[i] || 0;
           const bPart = bParts[i] || 0;
-          if (aPart !== bPart) {
-            return bPart - aPart; // Descending order
-          }
+          if (aPart !== bPart) return bPart - aPart;
         }
         return 0;
       });
 
-    // Split into two columns - first column gets higher versions
-    const midPoint = Math.ceil(sortedVersions.length / 2);
-    const column1 = sortedVersions.slice(0, midPoint);
-    const column2 = sortedVersions.slice(midPoint);
+      return {
+        groupName: group,
+        stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
+        stake,
+        versionCount: versions.size,
+        versionsInGroup: versions,
+        individualVersions
+      };
+    });
 
-    return { column1, column2 };
+    // Sort groups by version
+    const sortedGroups = groups.sort((a, b) => {
+      if (a.groupName === "unknown") return 1;
+      if (b.groupName === "unknown") return -1;
+      const aParts = a.groupName.split('.').map(Number);
+      const bParts = b.groupName.split('.').map(Number);
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aPart = aParts[i] || 0;
+        const bPart = bParts[i] || 0;
+        if (aPart !== bPart) return bPart - aPart;
+      }
+      return 0;
+    });
+
+    return { groups: sortedGroups };
   }, [validators]);
 
   // Get unique SFDP states for the dropdown
@@ -198,6 +225,32 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     });
   };
 
+  const toggleGroup = (group: string, versionsInGroup: Set<string>) => {
+    setSelectedVersions((prev) => {
+      const newSet = new Set(prev);
+      // Check if all versions in group are selected
+      const allSelected = Array.from(versionsInGroup).every(v => newSet.has(v));
+
+      if (allSelected) {
+        // Deselect all versions in group
+        versionsInGroup.forEach(v => newSet.delete(v));
+      } else {
+        // Select all versions in group
+        versionsInGroup.forEach(v => newSet.add(v));
+      }
+      return newSet;
+    });
+  };
+
+  const isGroupSelected = (versionsInGroup: Set<string>) => {
+    return Array.from(versionsInGroup).every(v => selectedVersions.has(v));
+  };
+
+  const isGroupPartiallySelected = (versionsInGroup: Set<string>) => {
+    const selectedCount = Array.from(versionsInGroup).filter(v => selectedVersions.has(v)).length;
+    return selectedCount > 0 && selectedCount < versionsInGroup.size;
+  };
+
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
@@ -254,38 +307,63 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       </div>
 
       {showVersionFilter && (
-        <div className="bg-gray-50 border rounded-lg p-3 mb-4 transition-all duration-200">
-          <div className="flex gap-8">
-            <div className="flex flex-col gap-1">
-              {versionStats.column1.map(({ version, stakePercentage }) => (
-                <label key={version} className="flex items-center gap-2 text-xs text-gray-900">
-                  <input
-                    type="checkbox"
-                    checked={selectedVersions.has(version)}
-                    onChange={() => toggleVersion(version)}
-                    className="rounded"
-                  />
-                  <span className="whitespace-nowrap">
-                    {version} ({stakePercentage}%)
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-col gap-1">
-              {versionStats.column2.map(({ version, stakePercentage }) => (
-                <label key={version} className="flex items-center gap-2 text-xs text-gray-900">
-                  <input
-                    type="checkbox"
-                    checked={selectedVersions.has(version)}
-                    onChange={() => toggleVersion(version)}
-                    className="rounded"
-                  />
-                  <span className="whitespace-nowrap">
-                    {version} ({stakePercentage}%)
-                  </span>
-                </label>
-              ))}
-            </div>
+        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {versionStats.groups.map((group) => {
+              const isSelected = isGroupSelected(group.versionsInGroup);
+              const isPartial = isGroupPartiallySelected(group.versionsInGroup);
+
+              return (
+                <div
+                  key={group.groupName}
+                  className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm"
+                >
+                  {/* Group header with checkbox */}
+                  <label className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isPartial;
+                      }}
+                      onChange={() => toggleGroup(group.groupName, group.versionsInGroup)}
+                      className="rounded"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm text-gray-900">
+                        Version {group.groupName}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        {group.stakePercentage}% stake • {group.versionCount} version{group.versionCount !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </label>
+
+                  {/* Individual versions */}
+                  <div className="flex flex-col gap-1 mt-2">
+                    {group.individualVersions.map((item) => (
+                      <label
+                        key={item.version}
+                        className="flex items-center gap-2 text-xs text-gray-700 pl-6 cursor-pointer hover:bg-gray-50 py-1 rounded"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedVersions.has(item.version)}
+                          onChange={() => toggleVersion(item.version)}
+                          className="rounded"
+                        />
+                        <span className="flex-1 whitespace-nowrap">
+                          {item.version}
+                        </span>
+                        <span className="text-gray-500">
+                          {item.stakePercentage}%
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
