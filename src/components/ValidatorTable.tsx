@@ -6,6 +6,7 @@ import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup } from "../utils/versionParser";
+import { getAsnDisplay } from "../utils/asnLookup";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const searchParams = useSearchParams();
@@ -17,6 +18,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
+  const [showInfrastructure, setShowInfrastructure] = useState(false);
+  const [showInfrastructureFilter, setShowInfrastructureFilter] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [selectedAsns, setSelectedAsns] = useState<Set<string>>(new Set());
+  const [selectedDataCenters, setSelectedDataCenters] = useState<Set<string>>(new Set());
   const [copyNotification, setCopyNotification] = useState<{
     message: string;
     isVisible: boolean;
@@ -41,6 +47,9 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     const sfdp = searchParams.get('sfdp');
     const sort = searchParams.get('sort');
     const sortDir = searchParams.get('sortDir');
+    const clients = searchParams.get('clients');
+    const asns = searchParams.get('asns');
+    const datacenters = searchParams.get('datacenters');
 
     if (versions) {
       setSelectedVersions(new Set(versions.split(',')));
@@ -52,6 +61,18 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     }
     if (sort && sortDir) {
       setSortCfg({ key: sort as keyof Validator, dir: sortDir as "asc" | "desc" });
+    }
+    if (clients) {
+      setSelectedClients(new Set(clients.split(',')));
+      setShowInfrastructureFilter(true);
+    }
+    if (asns) {
+      setSelectedAsns(new Set(asns.split(',')));
+      setShowInfrastructureFilter(true);
+    }
+    if (datacenters) {
+      setSelectedDataCenters(new Set(decodeURIComponent(datacenters).split(',')));
+      setShowInfrastructureFilter(true);
     }
   }, [searchParams]);
 
@@ -69,13 +90,22 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       params.set('sort', sortCfg.key);
       params.set('sortDir', sortCfg.dir);
     }
+    if (selectedClients.size > 0) {
+      params.set('clients', Array.from(selectedClients).join(','));
+    }
+    if (selectedAsns.size > 0) {
+      params.set('asns', Array.from(selectedAsns).join(','));
+    }
+    if (selectedDataCenters.size > 0) {
+      params.set('datacenters', encodeURIComponent(Array.from(selectedDataCenters).join(',')));
+    }
 
     const queryString = params.toString();
     const newUrl = queryString ? `?${queryString}` : '';
 
     // Update URL without causing a page reload
     window.history.replaceState({}, '', newUrl);
-  }, [selectedVersions, sfdpFilter, sortCfg]);
+  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters]);
 
   // Get unique versions with their stake percentages, including groups
   const versionStats = useMemo(() => {
@@ -175,13 +205,30 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
 
     // Apply version filter
     if (selectedVersions.size > 0) {
-      filteredValidators = filteredValidators.filter((v) => 
+      filteredValidators = filteredValidators.filter((v) =>
         selectedVersions.has(v.version || "unknown")
       );
     }
 
+    // Apply infrastructure filters
+    if (selectedClients.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedClients.has(v.softwareClient || "Unknown")
+      );
+    }
+    if (selectedAsns.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedAsns.has(v.autonomousSystemNumber?.toString() || "Unknown")
+      );
+    }
+    if (selectedDataCenters.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedDataCenters.has(v.dataCenterKey || "Unknown")
+      );
+    }
+
     return filteredValidators;
-  }, [validators, selectedVersions, sfdpFilter]);
+  }, [validators, selectedVersions, sfdpFilter, selectedClients, selectedAsns, selectedDataCenters]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -206,6 +253,45 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   }, [validators]);
 
   const sfdpStakePercentage = totalStake ? ((totalSfdpStake / totalStake) * 100).toFixed(2) : "0.00";
+
+  // Calculate infrastructure statistics
+  const infrastructureStats = useMemo(() => {
+    const clientMap = new Map<string, number>();
+    const asnMap = new Map<string, number>();
+    const dataCenterMap = new Map<string, number>();
+    const totalStake = validators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
+
+    validators.forEach((v) => {
+      const stake = Number(v.activatedStake || 0);
+
+      // Software client stats
+      const client = v.softwareClient || "Unknown";
+      clientMap.set(client, (clientMap.get(client) || 0) + stake);
+
+      // ASN stats
+      const asn = v.autonomousSystemNumber?.toString() || "Unknown";
+      asnMap.set(asn, (asnMap.get(asn) || 0) + stake);
+
+      // Data center stats
+      const dataCenter = v.dataCenterKey || "Unknown";
+      dataCenterMap.set(dataCenter, (dataCenterMap.get(dataCenter) || 0) + stake);
+    });
+
+    const toStatsArray = (map: Map<string, number>) =>
+      Array.from(map.entries())
+        .map(([key, stake]) => ({
+          key,
+          stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
+          stake,
+        }))
+        .sort((a, b) => b.stake - a.stake);
+
+    return {
+      clients: toStatsArray(clientMap),
+      asns: toStatsArray(asnMap),
+      dataCenters: toStatsArray(dataCenterMap),
+    };
+  }, [validators]);
 
   const toggleSort = (key: keyof Validator) => {
     setSortCfg((prev) =>
@@ -251,10 +337,50 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     return selectedCount > 0 && selectedCount < versionsInGroup.size;
   };
 
+  const toggleClient = (client: string) => {
+    setSelectedClients((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(client)) {
+        newSet.delete(client);
+      } else {
+        newSet.add(client);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAsn = (asn: string) => {
+    setSelectedAsns((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(asn)) {
+        newSet.delete(asn);
+      } else {
+        newSet.add(asn);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleDataCenter = (dataCenter: string) => {
+    setSelectedDataCenters((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(dataCenter)) {
+        newSet.delete(dataCenter);
+      } else {
+        newSet.add(dataCenter);
+      }
+      return newSet;
+    });
+  };
+
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
     setShowVersionFilter(false);
+    setSelectedClients(new Set());
+    setSelectedAsns(new Set());
+    setSelectedDataCenters(new Set());
+    setShowInfrastructureFilter(false);
     // Clear URL parameters
     window.history.replaceState({}, '', window.location.pathname);
   };
@@ -275,6 +401,21 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           >
             <span>Version Filter</span>
             <span className={`transition-transform duration-200 ${showVersionFilter ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </button>
+          <button
+            onClick={() => setShowInfrastructure(!showInfrastructure)}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
+          >
+            Infrastructure Columns {showInfrastructure ? '✓' : ''}
+          </button>
+          <button
+            onClick={() => setShowInfrastructureFilter(!showInfrastructureFilter)}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors flex items-center gap-1"
+          >
+            <span>Infrastructure Filters</span>
+            <span className={`transition-transform duration-200 ${showInfrastructureFilter ? 'rotate-180' : ''}`}>
               ▼
             </span>
           </button>
@@ -368,6 +509,80 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
         </div>
       )}
 
+      {showInfrastructureFilter && (
+        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Software Client Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">Software Client</h3>
+              <div className="flex flex-col gap-1">
+                {infrastructureStats.clients.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedClients.has(item.key)}
+                      onChange={() => toggleClient(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1">{item.key}</span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* ASN Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">ASN</h3>
+              <div className="flex flex-col gap-1">
+                {infrastructureStats.asns.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAsns.has(item.key)}
+                      onChange={() => toggleAsn(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1">
+                      {item.key === "Unknown" ? "Unknown" : getAsnDisplay(Number(item.key))}
+                    </span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Data Center Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">Data Center</h3>
+              <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+                {infrastructureStats.dataCenters.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDataCenters.has(item.key)}
+                      onChange={() => toggleDataCenter(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1 truncate" title={item.key}>{item.key}</span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
       ) : (
@@ -375,6 +590,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <ValidatorTableHeader
             sortCfg={sortCfg}
             onSort={toggleSort}
+            showInfrastructure={showInfrastructure}
           />
           <tbody>
             {sorted.map((v) => (
@@ -384,6 +600,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 totalStake={totalStake}
                 onCopySuccess={handleCopySuccess}
                 onCopyError={handleCopyError}
+                showInfrastructure={showInfrastructure}
               />
             ))}
           </tbody>
