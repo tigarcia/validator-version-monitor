@@ -6,7 +6,7 @@ import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup } from "../utils/versionParser";
-import { getAsnDisplay } from "../utils/asnLookup";
+import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const searchParams = useSearchParams();
@@ -385,6 +385,86 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     window.history.replaceState({}, '', window.location.pathname);
   };
 
+  // CSV Export Helper Functions
+  const escapeCsvValue = (value: string | number): string => {
+    const str = String(value);
+    // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const getAsnProviderName = (asn: number | null): string => {
+    if (asn === null) return "Unknown";
+    const provider = ASN_PROVIDERS[asn];
+    return provider || "Unknown";
+  };
+
+  const downloadCSV = (csvContent: string, filename: string) => {
+    const BOM = '\uFEFF'; // UTF-8 BOM for Excel
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportToCSV = () => {
+    // Check for empty results
+    if (sorted.length === 0) {
+      handleCopyError("No validators to export. Adjust your filters.");
+      return;
+    }
+
+    // Define base columns
+    const baseColumns = [
+      { header: "Name", getValue: (v: Validator) => escapeCsvValue(v.name) },
+      { header: "Identity", getValue: (v: Validator) => escapeCsvValue(v.identityPubkey) },
+      { header: "Vote Account", getValue: (v: Validator) => escapeCsvValue(v.voteAccountPubkey) },
+      { header: "Stake (SOL)", getValue: (v: Validator) => (Number(v.activatedStake) / 1e9).toFixed(2) },
+      { header: "Stake (%)", getValue: (v: Validator) => ((Number(v.activatedStake) / totalStake) * 100).toFixed(2) },
+      { header: "Version", getValue: (v: Validator) => escapeCsvValue(v.version) },
+      { header: "SFDP State", getValue: (v: Validator) => escapeCsvValue(v.sfdpState || "N/A") },
+      { header: "Is Active", getValue: (v: Validator) => v.delinquent ? "Delinquent" : "Active" }
+    ];
+
+    // Define infrastructure columns
+    const infraColumns = [
+      { header: "Software Client", getValue: (v: Validator) => escapeCsvValue(v.softwareClient || "Unknown") },
+      { header: "ASN Provider", getValue: (v: Validator) => escapeCsvValue(getAsnProviderName(v.autonomousSystemNumber)) },
+      { header: "ASN Number", getValue: (v: Validator) => escapeCsvValue(v.autonomousSystemNumber?.toString() || "Unknown") },
+      { header: "Data Center", getValue: (v: Validator) => escapeCsvValue(v.dataCenterKey || "Unknown") }
+    ];
+
+    // Combine columns based on visibility
+    const columns = showInfrastructure ? [...baseColumns, ...infraColumns] : baseColumns;
+
+    // Build CSV header
+    const headers = columns.map(col => col.header).join(',');
+
+    // Build CSV rows
+    const rows = sorted.map(validator =>
+      columns.map(col => col.getValue(validator)).join(',')
+    ).join('\n');
+
+    // Combine header and rows
+    const csvContent = `${headers}\n${rows}`;
+
+    // Generate filename with timestamp
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
+    const filename = `validators-${timestamp}.csv`;
+
+    // Download CSV
+    downloadCSV(csvContent, filename);
+
+    // Show success notification
+    handleCopySuccess(`Exported ${sorted.length.toLocaleString()} validators to ${filename}`);
+  };
+
   return (
     <div className="bg-white p-4 rounded-2xl shadow text-gray-900">
       <div className="flex flex-wrap items-center gap-4 mb-4">
@@ -445,6 +525,12 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
             </span>
           )}
         </div>
+        <button
+          onClick={handleExportToCSV}
+          className="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors ml-auto"
+        >
+          Export to CSV
+        </button>
       </div>
 
       {showVersionFilter && (
