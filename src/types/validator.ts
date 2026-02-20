@@ -7,4 +7,7 @@ export type Validator = {
   name: string;
   sfdp: boolean;
   sfdpState: string | null;
+  autonomousSystemNumber: number | null;
+  dataCenterKey: string | null;
+  softwareClient: string | null;
 };

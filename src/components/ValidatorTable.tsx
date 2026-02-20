@@ -6,6 +6,7 @@ import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup } from "../utils/versionParser";
+import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
 
 export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
   const searchParams = useSearchParams();
@@ -17,6 +18,11 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
+  const [showInfrastructure, setShowInfrastructure] = useState(false);
+  const [showInfrastructureFilter, setShowInfrastructureFilter] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [selectedAsns, setSelectedAsns] = useState<Set<string>>(new Set());
+  const [selectedDataCenters, setSelectedDataCenters] = useState<Set<string>>(new Set());
   const [copyNotification, setCopyNotification] = useState<{
     message: string;
     isVisible: boolean;
@@ -41,6 +47,9 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     const sfdp = searchParams.get('sfdp');
     const sort = searchParams.get('sort');
     const sortDir = searchParams.get('sortDir');
+    const clients = searchParams.get('clients');
+    const asns = searchParams.get('asns');
+    const datacenters = searchParams.get('datacenters');
 
     if (versions) {
       setSelectedVersions(new Set(versions.split(',')));
@@ -52,6 +61,18 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     }
     if (sort && sortDir) {
       setSortCfg({ key: sort as keyof Validator, dir: sortDir as "asc" | "desc" });
+    }
+    if (clients) {
+      setSelectedClients(new Set(clients.split(',')));
+      setShowInfrastructureFilter(true);
+    }
+    if (asns) {
+      setSelectedAsns(new Set(asns.split(',')));
+      setShowInfrastructureFilter(true);
+    }
+    if (datacenters) {
+      setSelectedDataCenters(new Set(decodeURIComponent(datacenters).split(',')));
+      setShowInfrastructureFilter(true);
     }
   }, [searchParams]);
 
@@ -69,13 +90,22 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
       params.set('sort', sortCfg.key);
       params.set('sortDir', sortCfg.dir);
     }
+    if (selectedClients.size > 0) {
+      params.set('clients', Array.from(selectedClients).join(','));
+    }
+    if (selectedAsns.size > 0) {
+      params.set('asns', Array.from(selectedAsns).join(','));
+    }
+    if (selectedDataCenters.size > 0) {
+      params.set('datacenters', encodeURIComponent(Array.from(selectedDataCenters).join(',')));
+    }
 
     const queryString = params.toString();
     const newUrl = queryString ? `?${queryString}` : '';
 
     // Update URL without causing a page reload
     window.history.replaceState({}, '', newUrl);
-  }, [selectedVersions, sfdpFilter, sortCfg]);
+  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters]);
 
   // Get unique versions with their stake percentages, including groups
   const versionStats = useMemo(() => {
@@ -175,13 +205,30 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
 
     // Apply version filter
     if (selectedVersions.size > 0) {
-      filteredValidators = filteredValidators.filter((v) => 
+      filteredValidators = filteredValidators.filter((v) =>
         selectedVersions.has(v.version || "unknown")
       );
     }
 
+    // Apply infrastructure filters
+    if (selectedClients.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedClients.has(v.softwareClient || "Unknown")
+      );
+    }
+    if (selectedAsns.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedAsns.has(v.autonomousSystemNumber?.toString() || "Unknown")
+      );
+    }
+    if (selectedDataCenters.size > 0) {
+      filteredValidators = filteredValidators.filter((v) =>
+        selectedDataCenters.has(v.dataCenterKey || "Unknown")
+      );
+    }
+
     return filteredValidators;
-  }, [validators, selectedVersions, sfdpFilter]);
+  }, [validators, selectedVersions, sfdpFilter, selectedClients, selectedAsns, selectedDataCenters]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -206,6 +253,45 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
   }, [validators]);
 
   const sfdpStakePercentage = totalStake ? ((totalSfdpStake / totalStake) * 100).toFixed(2) : "0.00";
+
+  // Calculate infrastructure statistics
+  const infrastructureStats = useMemo(() => {
+    const clientMap = new Map<string, number>();
+    const asnMap = new Map<string, number>();
+    const dataCenterMap = new Map<string, number>();
+    const totalStake = validators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
+
+    validators.forEach((v) => {
+      const stake = Number(v.activatedStake || 0);
+
+      // Software client stats
+      const client = v.softwareClient || "Unknown";
+      clientMap.set(client, (clientMap.get(client) || 0) + stake);
+
+      // ASN stats
+      const asn = v.autonomousSystemNumber?.toString() || "Unknown";
+      asnMap.set(asn, (asnMap.get(asn) || 0) + stake);
+
+      // Data center stats
+      const dataCenter = v.dataCenterKey || "Unknown";
+      dataCenterMap.set(dataCenter, (dataCenterMap.get(dataCenter) || 0) + stake);
+    });
+
+    const toStatsArray = (map: Map<string, number>) =>
+      Array.from(map.entries())
+        .map(([key, stake]) => ({
+          key,
+          stakePercentage: totalStake ? ((stake / totalStake) * 100).toFixed(2) : "0.00",
+          stake,
+        }))
+        .sort((a, b) => b.stake - a.stake);
+
+    return {
+      clients: toStatsArray(clientMap),
+      asns: toStatsArray(asnMap),
+      dataCenters: toStatsArray(dataCenterMap),
+    };
+  }, [validators]);
 
   const toggleSort = (key: keyof Validator) => {
     setSortCfg((prev) =>
@@ -251,12 +337,132 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
     return selectedCount > 0 && selectedCount < versionsInGroup.size;
   };
 
+  const toggleClient = (client: string) => {
+    setSelectedClients((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(client)) {
+        newSet.delete(client);
+      } else {
+        newSet.add(client);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAsn = (asn: string) => {
+    setSelectedAsns((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(asn)) {
+        newSet.delete(asn);
+      } else {
+        newSet.add(asn);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleDataCenter = (dataCenter: string) => {
+    setSelectedDataCenters((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(dataCenter)) {
+        newSet.delete(dataCenter);
+      } else {
+        newSet.add(dataCenter);
+      }
+      return newSet;
+    });
+  };
+
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
     setShowVersionFilter(false);
+    setSelectedClients(new Set());
+    setSelectedAsns(new Set());
+    setSelectedDataCenters(new Set());
+    setShowInfrastructureFilter(false);
     // Clear URL parameters
     window.history.replaceState({}, '', window.location.pathname);
+  };
+
+  // CSV Export Helper Functions
+  const escapeCsvValue = (value: string | number): string => {
+    const str = String(value);
+    // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const getAsnProviderName = (asn: number | null): string => {
+    if (asn === null) return "Unknown";
+    const provider = ASN_PROVIDERS[asn];
+    return provider || "Unknown";
+  };
+
+  const downloadCSV = (csvContent: string, filename: string) => {
+    const BOM = '\uFEFF'; // UTF-8 BOM for Excel
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportToCSV = () => {
+    // Check for empty results
+    if (sorted.length === 0) {
+      handleCopyError("No validators to export. Adjust your filters.");
+      return;
+    }
+
+    // Define base columns
+    const baseColumns = [
+      { header: "Name", getValue: (v: Validator) => escapeCsvValue(v.name) },
+      { header: "Identity", getValue: (v: Validator) => escapeCsvValue(v.identityPubkey) },
+      { header: "Vote Account", getValue: (v: Validator) => escapeCsvValue(v.voteAccountPubkey) },
+      { header: "Stake (SOL)", getValue: (v: Validator) => (Number(v.activatedStake) / 1e9).toFixed(2) },
+      { header: "Stake (%)", getValue: (v: Validator) => ((Number(v.activatedStake) / totalStake) * 100).toFixed(2) },
+      { header: "Version", getValue: (v: Validator) => escapeCsvValue(v.version) },
+      { header: "SFDP State", getValue: (v: Validator) => escapeCsvValue(v.sfdpState || "N/A") },
+      { header: "Is Active", getValue: (v: Validator) => v.delinquent ? "Delinquent" : "Active" }
+    ];
+
+    // Define infrastructure columns
+    const infraColumns = [
+      { header: "Software Client", getValue: (v: Validator) => escapeCsvValue(v.softwareClient || "Unknown") },
+      { header: "ASN Provider", getValue: (v: Validator) => escapeCsvValue(getAsnProviderName(v.autonomousSystemNumber)) },
+      { header: "ASN Number", getValue: (v: Validator) => escapeCsvValue(v.autonomousSystemNumber?.toString() || "Unknown") },
+      { header: "Data Center", getValue: (v: Validator) => escapeCsvValue(v.dataCenterKey || "Unknown") }
+    ];
+
+    // Combine columns based on visibility
+    const columns = showInfrastructure ? [...baseColumns, ...infraColumns] : baseColumns;
+
+    // Build CSV header
+    const headers = columns.map(col => col.header).join(',');
+
+    // Build CSV rows
+    const rows = sorted.map(validator =>
+      columns.map(col => col.getValue(validator)).join(',')
+    ).join('\n');
+
+    // Combine header and rows
+    const csvContent = `${headers}\n${rows}`;
+
+    // Generate filename with timestamp
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-');
+    const filename = `validators-${timestamp}.csv`;
+
+    // Download CSV
+    downloadCSV(csvContent, filename);
+
+    // Show success notification
+    handleCopySuccess(`Exported ${sorted.length.toLocaleString()} validators to ${filename}`);
   };
 
   return (
@@ -275,6 +481,21 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           >
             <span>Version Filter</span>
             <span className={`transition-transform duration-200 ${showVersionFilter ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </button>
+          <button
+            onClick={() => setShowInfrastructure(!showInfrastructure)}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
+          >
+            Infrastructure Columns {showInfrastructure ? '✓' : ''}
+          </button>
+          <button
+            onClick={() => setShowInfrastructureFilter(!showInfrastructureFilter)}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors flex items-center gap-1"
+          >
+            <span>Infrastructure Filters</span>
+            <span className={`transition-transform duration-200 ${showInfrastructureFilter ? 'rotate-180' : ''}`}>
               ▼
             </span>
           </button>
@@ -304,6 +525,12 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
             </span>
           )}
         </div>
+        <button
+          onClick={handleExportToCSV}
+          className="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors ml-auto"
+        >
+          Export to CSV
+        </button>
       </div>
 
       {showVersionFilter && (
@@ -368,6 +595,80 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
         </div>
       )}
 
+      {showInfrastructureFilter && (
+        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Software Client Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">Software Client</h3>
+              <div className="flex flex-col gap-1">
+                {infrastructureStats.clients.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedClients.has(item.key)}
+                      onChange={() => toggleClient(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1">{item.key}</span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* ASN Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">ASN</h3>
+              <div className="flex flex-col gap-1">
+                {infrastructureStats.asns.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedAsns.has(item.key)}
+                      onChange={() => toggleAsn(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1">
+                      {item.key === "Unknown" ? "Unknown" : getAsnDisplay(Number(item.key))}
+                    </span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Data Center Section */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2 text-gray-900">Data Center</h3>
+              <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+                {infrastructureStats.dataCenters.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer hover:bg-gray-100 py-1 px-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDataCenters.has(item.key)}
+                      onChange={() => toggleDataCenter(item.key)}
+                      className="rounded"
+                    />
+                    <span className="flex-1 truncate" title={item.key}>{item.key}</span>
+                    <span className="text-gray-500">{item.stakePercentage}%</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
       ) : (
@@ -375,6 +676,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
           <ValidatorTableHeader
             sortCfg={sortCfg}
             onSort={toggleSort}
+            showInfrastructure={showInfrastructure}
           />
           <tbody>
             {sorted.map((v) => (
@@ -384,6 +686,7 @@ export default function ValidatorTable({ initialData }: { initialData: Validator
                 totalStake={totalStake}
                 onCopySuccess={handleCopySuccess}
                 onCopyError={handleCopyError}
+                showInfrastructure={showInfrastructure}
               />
             ))}
           </tbody>

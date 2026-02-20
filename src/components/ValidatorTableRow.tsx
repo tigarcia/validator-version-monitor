@@ -1,6 +1,7 @@
 import { Validator } from "../types/validator";
 import { copyToClipboard } from "../utils/copyToClipboard";
 import { Copy } from "lucide-react";
+import { getAsnDisplay } from "../utils/asnLookup";
 
 const LAMPORTS_PER_SOL = 10 ** 9;
 
@@ -9,13 +10,15 @@ interface ValidatorTableRowProps {
   totalStake: number;
   onCopySuccess: (message: string) => void;
   onCopyError: (message: string) => void;
+  showInfrastructure: boolean;
 }
 
 export default function ValidatorTableRow({
   validator,
   totalStake,
   onCopySuccess,
-  onCopyError
+  onCopyError,
+  showInfrastructure
 }: ValidatorTableRowProps) {
 
   const handleCopy = async (text: string, label: string) => {
@@ -63,6 +66,13 @@ export default function ValidatorTableRow({
       <td className="px-3 py-1 text-gray-900">{validator.version}</td>
       <td className="px-3 py-1 text-center text-gray-900">{validator.sfdpState || "N/A"}</td>
       <td className="px-3 py-1 text-center hidden lg:table-cell text-gray-900">{validator.delinquent ? "🚫" : "✅"}</td>
+      {showInfrastructure && (
+        <>
+          <td className="px-3 py-1 text-gray-900">{validator.softwareClient || "Unknown"}</td>
+          <td className="px-3 py-1 text-gray-900">{getAsnDisplay(validator.autonomousSystemNumber)}</td>
+          <td className="px-3 py-1 text-gray-900">{validator.dataCenterKey || "Unknown"}</td>
+        </>
+      )}
     </tr>
   );
 }

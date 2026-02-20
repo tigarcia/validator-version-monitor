@@ -4,9 +4,10 @@ import { Validator } from "../types/validator";
 interface ValidatorTableHeaderProps {
   sortCfg: { key: keyof Validator; dir: "asc" | "desc" };
   onSort: (key: keyof Validator) => void;
+  showInfrastructure: boolean;
 }
 
-export default function ValidatorTableHeader({ sortCfg, onSort }: ValidatorTableHeaderProps) {
+export default function ValidatorTableHeader({ sortCfg, onSort, showInfrastructure }: ValidatorTableHeaderProps) {
   const columns = [
     { key: "name", label: "Name" },
     { key: "identityPubkey", label: "Identity" },
@@ -17,10 +18,18 @@ export default function ValidatorTableHeader({ sortCfg, onSort }: ValidatorTable
     { key: "delinquent", label: "Is Active?" },
   ];
 
+  const infrastructureColumns = [
+    { key: "softwareClient", label: "Software Client" },
+    { key: "autonomousSystemNumber", label: "ASN" },
+    { key: "dataCenterKey", label: "Data Center" },
+  ];
+
+  const allColumns = showInfrastructure ? [...columns, ...infrastructureColumns] : columns;
+
   return (
     <thead>
       <tr className="border-b">
-        {columns.map(({ key, label }) => (
+        {allColumns.map(({ key, label }) => (
           <th
             key={key}
             onClick={() => onSort(key as keyof Validator)}
