@@ -116,7 +116,7 @@ export default function ValidatorTable({
     }
 
     const queryString = params.toString();
-    const newUrl = queryString ? `?${queryString}` : '';
+    const newUrl = queryString ? `?${queryString}` : window.location.pathname;
 
     // Update URL without causing a page reload
     window.history.replaceState({}, '', newUrl);
