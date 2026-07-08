@@ -24,6 +24,7 @@ export default function ValidatorTable({
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [sfdpFilter, setSfdpFilter] = useState("all");
   const [showVersionFilter, setShowVersionFilter] = useState(false);
+  const [showUnstaked, setShowUnstaked] = useState(false);
   const [showInfrastructure, setShowInfrastructure] = useState(false);
   const [showInfrastructureFilter, setShowInfrastructureFilter] = useState(false);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
@@ -56,6 +57,7 @@ export default function ValidatorTable({
     const clients = searchParams.get('clients');
     const asns = searchParams.get('asns');
     const datacenters = searchParams.get('datacenters');
+    const unstaked = searchParams.get('unstaked');
 
     if (versions) {
       setSelectedVersions(new Set(versions.split(',')));
@@ -79,6 +81,10 @@ export default function ValidatorTable({
     if (datacenters) {
       setSelectedDataCenters(new Set(decodeURIComponent(datacenters).split(',')));
       setShowInfrastructureFilter(true);
+    }
+    if (unstaked === '1') {
+      setShowUnstaked(true);
+      setShowVersionFilter(true);
     }
   }, [searchParams]);
 
@@ -105,13 +111,16 @@ export default function ValidatorTable({
     if (selectedDataCenters.size > 0) {
       params.set('datacenters', encodeURIComponent(Array.from(selectedDataCenters).join(',')));
     }
+    if (showUnstaked) {
+      params.set('unstaked', '1');
+    }
 
     const queryString = params.toString();
     const newUrl = queryString ? `?${queryString}` : '';
 
     // Update URL without causing a page reload
     window.history.replaceState({}, '', newUrl);
-  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters]);
+  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters, showUnstaked]);
 
   // Get unique versions with their stake percentages, including groups
   const versionStats = useMemo(() => {
@@ -183,6 +192,51 @@ export default function ValidatorTable({
 
     return { groups: sortedGroups };
   }, [validators]);
+
+  // Version stats for unstaked gossip nodes (counts, not stake)
+  const unstakedVersionStats = useMemo(() => {
+    const compareVersionsDesc = (a: string, b: string) => {
+      if (a === "unknown") return 1;
+      if (b === "unknown") return -1;
+      const aParts = a.split('.').map(Number);
+      const bParts = b.split('.').map(Number);
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const aPart = aParts[i] || 0;
+        const bPart = bParts[i] || 0;
+        if (aPart !== bPart) return bPart - aPart;
+      }
+      return 0;
+    };
+
+    const groupMap = new Map<string, Map<string, number>>(); // group -> version -> count
+    let totalNodes = 0;
+
+    Object.entries(unstakedVersionCounts).forEach(([version, count]) => {
+      totalNodes += count;
+      const group = getMinorVersionGroup(version);
+      if (!groupMap.has(group)) {
+        groupMap.set(group, new Map());
+      }
+      groupMap.get(group)!.set(version, count);
+    });
+
+    const groups = Array.from(groupMap.entries())
+      .map(([groupName, versions]) => {
+        const nodeCount = Array.from(versions.values()).reduce((sum, c) => sum + c, 0);
+        const individualVersions = Array.from(versions.entries())
+          .map(([version, count]) => ({ version, count }))
+          .sort((a, b) => compareVersionsDesc(a.version, b.version));
+        return {
+          groupName,
+          nodeCount,
+          versionCount: versions.size,
+          individualVersions,
+        };
+      })
+      .sort((a, b) => compareVersionsDesc(a.groupName, b.groupName));
+
+    return { groups, totalNodes };
+  }, [unstakedVersionCounts]);
 
   // Get unique SFDP states for the dropdown
   const sfdpStates = useMemo(() => {
@@ -379,10 +433,21 @@ export default function ValidatorTable({
     });
   };
 
+  const toggleUnstaked = () => {
+    setShowUnstaked((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowVersionFilter(true);
+      }
+      return next;
+    });
+  };
+
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
     setShowVersionFilter(false);
+    setShowUnstaked(false);
     setSelectedClients(new Set());
     setSelectedAsns(new Set());
     setSelectedDataCenters(new Set());
@@ -491,6 +556,12 @@ export default function ValidatorTable({
             </span>
           </button>
           <button
+            onClick={toggleUnstaked}
+            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
+          >
+            Unstaked Nodes {showUnstaked ? '✓' : ''}
+          </button>
+          <button
             onClick={() => setShowInfrastructure(!showInfrastructure)}
             className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
           >
@@ -539,7 +610,7 @@ export default function ValidatorTable({
         </button>
       </div>
 
-      {showVersionFilter && (
+      {showVersionFilter && !showUnstaked && (
         <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {versionStats.groups.map((group) => {
@@ -597,6 +668,42 @@ export default function ValidatorTable({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {showVersionFilter && showUnstaked && (
+        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+          <div className="text-sm text-gray-700 mb-3">
+            <strong>{unstakedVersionStats.totalNodes.toLocaleString()}</strong> unstaked gossip nodes
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {unstakedVersionStats.groups.map((group) => (
+              <div
+                key={group.groupName}
+                className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm"
+              >
+                <div className="mb-2 pb-2 border-b border-gray-200">
+                  <div className="font-semibold text-sm text-gray-900">
+                    Version {group.groupName}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {group.nodeCount.toLocaleString()} node{group.nodeCount !== 1 ? 's' : ''} • {group.versionCount} version{group.versionCount !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 mt-2">
+                  {group.individualVersions.map((item) => (
+                    <div
+                      key={item.version}
+                      className="flex items-center gap-2 text-xs text-gray-700 py-1"
+                    >
+                      <span className="flex-1 whitespace-nowrap">{item.version}</span>
+                      <span className="text-gray-500">{item.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
