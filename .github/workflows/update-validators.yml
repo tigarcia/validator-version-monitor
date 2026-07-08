@@ -24,12 +24,16 @@ jobs:
         run: |
           solana -um validators --output json-compact > data/validators.json
 
+      - name: Generate gossip.json
+        run: |
+          solana -um gossip --output json > data/gossip.json
+
       - name: Commit and push if changed
         run: |
-          if [[ -n "$(git status --porcelain data/validators.json)" ]]; then
+          if [[ -n "$(git status --porcelain data/validators.json data/gossip.json)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/validators.json
+            git add data/validators.json data/gossip.json
             git commit -m "update validators.json $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             git push
           else
