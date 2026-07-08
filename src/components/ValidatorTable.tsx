@@ -5,7 +5,7 @@ import { Validator } from "../types/validator";
 import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
-import { getMinorVersionGroup } from "../utils/versionParser";
+import { getMinorVersionGroup, compareVersionsDesc } from "../utils/versionParser";
 import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
 
 export default function ValidatorTable({
@@ -152,19 +152,7 @@ export default function ValidatorTable({
         version,
         stakePercentage: totalStake ? ((versionMap.get(version)! / totalStake) * 100).toFixed(2) : "0.00",
         stake: versionMap.get(version)!
-      })).sort((a, b) => {
-        // Sort individuals within group
-        if (a.version === "unknown") return 1;
-        if (b.version === "unknown") return -1;
-        const aParts = a.version.split('.').map(Number);
-        const bParts = b.version.split('.').map(Number);
-        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-          const aPart = aParts[i] || 0;
-          const bPart = bParts[i] || 0;
-          if (aPart !== bPart) return bPart - aPart;
-        }
-        return 0;
-      });
+      })).sort((a, b) => compareVersionsDesc(a.version, b.version));
 
       return {
         groupName: group,
@@ -177,37 +165,13 @@ export default function ValidatorTable({
     });
 
     // Sort groups by version
-    const sortedGroups = groups.sort((a, b) => {
-      if (a.groupName === "unknown") return 1;
-      if (b.groupName === "unknown") return -1;
-      const aParts = a.groupName.split('.').map(Number);
-      const bParts = b.groupName.split('.').map(Number);
-      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-        const aPart = aParts[i] || 0;
-        const bPart = bParts[i] || 0;
-        if (aPart !== bPart) return bPart - aPart;
-      }
-      return 0;
-    });
+    const sortedGroups = groups.sort((a, b) => compareVersionsDesc(a.groupName, b.groupName));
 
     return { groups: sortedGroups };
   }, [validators]);
 
   // Version stats for unstaked gossip nodes (counts, not stake)
   const unstakedVersionStats = useMemo(() => {
-    const compareVersionsDesc = (a: string, b: string) => {
-      if (a === "unknown") return 1;
-      if (b === "unknown") return -1;
-      const aParts = a.split('.').map(Number);
-      const bParts = b.split('.').map(Number);
-      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-        const aPart = aParts[i] || 0;
-        const bPart = bParts[i] || 0;
-        if (aPart !== bPart) return bPart - aPart;
-      }
-      return 0;
-    };
-
     const groupMap = new Map<string, Map<string, number>>(); // group -> version -> count
     let totalNodes = 0;
 

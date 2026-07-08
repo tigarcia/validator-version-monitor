@@ -89,3 +89,20 @@ export function getMinorVersionGroup(version: string): string {
 export function isVersionInGroup(version: string, group: string): boolean {
   return getMinorVersionGroup(version) === group;
 }
+
+/**
+ * Compares two version strings for descending sort order.
+ * "unknown" always sorts last.
+ */
+export function compareVersionsDesc(a: string, b: string): number {
+  if (a === "unknown") return 1;
+  if (b === "unknown") return -1;
+  const aParts = a.split('.').map(Number);
+  const bParts = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aPart = aParts[i] || 0;
+    const bPart = bParts[i] || 0;
+    if (aPart !== bPart) return bPart - aPart;
+  }
+  return 0;
+}
