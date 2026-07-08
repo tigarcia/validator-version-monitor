@@ -8,7 +8,13 @@ import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup } from "../utils/versionParser";
 import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
 
-export default function ValidatorTable({ initialData }: { initialData: Validator[] }) {
+export default function ValidatorTable({
+  initialData,
+  unstakedVersionCounts = {},
+}: {
+  initialData: Validator[];
+  unstakedVersionCounts?: Record<string, number>;
+}) {
   const searchParams = useSearchParams();
   const [validators] = useState<Validator[]>(initialData);
   const [sortCfg, setSortCfg] = useState<{ key: keyof Validator; dir: "asc" | "desc" }>({

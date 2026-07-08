@@ -24,6 +24,11 @@ interface ValidatorsAppValidator {
   software_client: string | null;
 }
 
+interface GossipNode {
+  identityPubkey: string;
+  version?: string;
+}
+
 export default async function Home() {
   const filePath = path.join(process.cwd(), "data", "validators.json");
   let validators: Validator[] = [];
@@ -65,6 +70,25 @@ export default async function Home() {
   } catch (error) {
     console.error("Error fetching data:", error);
     // file missing or bad JSON → empty list
+  }
+
+  // Count versions of unstaked gossip nodes (nodes not in the validator set)
+  let unstakedVersionCounts: Record<string, number> = {};
+  try {
+    const gossipRaw = await fs.readFile(
+      path.join(process.cwd(), "data", "gossip.json"),
+      "utf-8"
+    );
+    const gossipNodes: GossipNode[] = JSON.parse(gossipRaw);
+    const stakedIdentities = new Set(validators.map((v) => v.identityPubkey));
+    for (const node of gossipNodes) {
+      if (stakedIdentities.has(node.identityPubkey)) continue;
+      const version = node.version || "unknown";
+      unstakedVersionCounts[version] = (unstakedVersionCounts[version] || 0) + 1;
+    }
+  } catch (error) {
+    console.error("Error reading gossip data:", error);
+    unstakedVersionCounts = {};
   }
 
   // Create maps for efficient lookup
@@ -117,7 +141,10 @@ export default async function Home() {
         </Link>
       </div>
       <Suspense fallback={<div className="text-center text-gray-500">Loading...</div>}>
-        <ValidatorTable initialData={enrichedValidators} />
+        <ValidatorTable
+          initialData={enrichedValidators}
+          unstakedVersionCounts={unstakedVersionCounts}
+        />
       </Suspense>
     </main>
   );
