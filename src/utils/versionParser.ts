@@ -8,24 +8,27 @@ export interface ParsedVersion {
 }
 
 /**
- * Detects if a version string is a Firedancer version.
- * Firedancer versions follow the pattern: 0.XXX.YYYYY
- * where YYYYY (5+ digits) encodes the protocol version.
+ * Detects versions that encode their true Agave-compatible version in their
+ * final dot-segment rather than in their own major.minor.patch numbering.
+ * Firedancer-style clients version themselves independently, but append a
+ * 5-digit MMmmpp code as the last segment - sometimes directly
+ * (e.g. "0.1005.40100"), sometimes after a -rc/-beta/-alpha pre-release tag
+ * (e.g. "1.100.0-beta.40201", where the tag itself becomes the 3rd segment
+ * and the code moves to the 4th).
  */
 export function isFiredancerVersion(version: string): boolean {
-  if (!version.startsWith('0.')) return false;
   const parts = version.split('.');
   if (parts.length < 3) return false;
-  const thirdSegment = parts[2];
-  return thirdSegment.length >= 5 && /^\d+$/.test(thirdSegment);
+  const lastSegment = parts[parts.length - 1];
+  return /^\d{5}$/.test(lastSegment);
 }
 
 /**
  * Parses both Agave and Firedancer version formats.
  *
  * Agave: "3.1.8" → major=3, minor=1, patch=8
- * Firedancer: "0.811.30108" → major=3, minor=1, patch=8
- *   - Decoding: First digit (3) = major, next 2 (01) = minor, last 2 (08) = patch
+ * Firedancer: the final dot-segment is a 5-digit MMmmpp code, e.g.
+ *   "...40201" → major=4, minor=02, patch=01 (Agave-compatible 4.2.1)
  */
 export function parseVersion(version: string): ParsedVersion {
   if (!version || version === 'unknown') {
@@ -41,15 +44,13 @@ export function parseVersion(version: string): ParsedVersion {
 
   const parts = version.split('.');
 
-  // Check if it's Firedancer format
   if (isFiredancerVersion(version)) {
-    const patchSegment = parts[2];
+    const encodedSegment = parts[parts.length - 1];
 
-    // Extract protocol version from patch segment
-    // Format: MMMPP where M=major digit, MM=minor, PP=patch
-    const major = parseInt(patchSegment[0], 10) || 0;
-    const minor = parseInt(patchSegment.substring(1, 3), 10) || 0;
-    const patch = parseInt(patchSegment.substring(3, 5), 10) || 0;
+    // Format: MMmmpp - e.g. "40201" -> major=4, minor=02, patch=01
+    const major = parseInt(encodedSegment[0], 10) || 0;
+    const minor = parseInt(encodedSegment.substring(1, 3), 10) || 0;
+    const patch = parseInt(encodedSegment.substring(3, 5), 10) || 0;
 
     return {
       original: version,
@@ -91,18 +92,18 @@ export function isVersionInGroup(version: string, group: string): boolean {
 }
 
 /**
- * Compares two version strings for descending sort order.
+ * Compares two version strings for descending sort order, using each
+ * version's effective (decoded) major.minor.patch so Firedancer-style
+ * versions sort by their true Agave compatibility, not their own numbering.
  * "unknown" always sorts last.
  */
 export function compareVersionsDesc(a: string, b: string): number {
   if (a === "unknown") return 1;
   if (b === "unknown") return -1;
-  const aParts = a.split('.').map(Number);
-  const bParts = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-    const aPart = aParts[i] || 0;
-    const bPart = bParts[i] || 0;
-    if (aPart !== bPart) return bPart - aPart;
-  }
+  const pa = parseVersion(a);
+  const pb = parseVersion(b);
+  if (pa.major !== pb.major) return pb.major - pa.major;
+  if (pa.minor !== pb.minor) return pb.minor - pa.minor;
+  if (pa.patch !== pb.patch) return pb.patch - pa.patch;
   return 0;
 }
