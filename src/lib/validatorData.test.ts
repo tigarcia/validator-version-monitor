@@ -312,6 +312,54 @@ describe("loadEnrichedValidators", () => {
     expect(result[0].sfdp).toBe(false);
     expect(result[0].autonomousSystemNumber).toBeNull();
   });
+
+  it("initiates the Stakewiz, SFDP, and validators.app requests concurrently rather than sequentially", async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify([rawValidator]));
+
+    const pendingResolvers: Record<string, (value: unknown) => void> = {};
+    mockFetch.mockImplementation((url: string) => {
+      return new Promise((resolve) => {
+        if (url.includes("stakewiz")) pendingResolvers.stakewiz = resolve;
+        else if (url.includes("sfdp_participants")) pendingResolvers.sfdp = resolve;
+        else if (url.includes("validators.app")) pendingResolvers.infra = resolve;
+        else throw new Error(`unexpected fetch: ${url}`);
+      });
+    });
+
+    const promise = loadEnrichedValidators("mainnet");
+
+    // Flush pending microtasks (the readFile await + JSON.parse) without
+    // resolving any fetch. If the three requests are fired sequentially,
+    // only the first fetch will have been called at this point.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+
+    pendingResolvers.stakewiz(jsonResponse([]));
+    pendingResolvers.sfdp(jsonResponse([]));
+    pendingResolvers.infra(jsonResponse([]));
+
+    await promise;
+  });
+
+  it("requests enrichment data with short-lived caching instead of an uncached fetch on every request", async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify([rawValidator]));
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) return jsonResponse([]);
+      if (url.includes("sfdp_participants")) return jsonResponse([]);
+      if (url.includes("validators.app")) return jsonResponse([]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await loadEnrichedValidators("mainnet");
+
+    for (const [url, options] of mockFetch.mock.calls as [string, RequestInit][]) {
+      expect(
+        options?.next && typeof (options.next as { revalidate?: number }).revalidate === "number",
+        `expected a next.revalidate option on fetch to ${url}`
+      ).toBe(true);
+    }
+  });
 });
 
 describe("loadUnstakedVersionCounts", () => {
