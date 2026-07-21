@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs/promises";
-import { loadEnrichedValidators, loadUnstakedVersionCounts } from "./validatorData";
+import { loadEnrichedValidators, loadUnstakedVersionCounts, resolveBridgedName } from "./validatorData";
 import { Validator } from "../types/validator";
 
 vi.mock("fs/promises", () => ({
@@ -24,6 +24,58 @@ const rawValidator = {
 function jsonResponse(data: unknown) {
   return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
 }
+
+describe("resolveBridgedName", () => {
+  it("prefers the SFDP participant's own name when present", () => {
+    const result = resolveBridgedName(
+      "mainnet-id-1",
+      "SFDP Name",
+      new Map([["mainnet-id-1", "mainnet-vote-1"]]),
+      new Map([["mainnet-vote-1", "Stakewiz Name"]])
+    );
+    expect(result).toBe("SFDP Name");
+  });
+
+  it("resolves via the mainnet identity -> vote -> Stakewiz chain when SFDP has no own name", () => {
+    const result = resolveBridgedName(
+      "mainnet-id-1",
+      undefined,
+      new Map([["mainnet-id-1", "mainnet-vote-1"]]),
+      new Map([["mainnet-vote-1", "Stakewiz Name"]])
+    );
+    expect(result).toBe("Stakewiz Name");
+  });
+
+  it("falls back to 'private validator' when the chain resolves but Stakewiz has no name", () => {
+    const result = resolveBridgedName(
+      "mainnet-id-1",
+      undefined,
+      new Map([["mainnet-id-1", "mainnet-vote-1"]]),
+      new Map()
+    );
+    expect(result).toBe("private validator");
+  });
+
+  it("falls back to 'unknown' when there is no mainnetBetaPubkey at all", () => {
+    const result = resolveBridgedName(
+      undefined,
+      undefined,
+      new Map([["mainnet-id-1", "mainnet-vote-1"]]),
+      new Map([["mainnet-vote-1", "Stakewiz Name"]])
+    );
+    expect(result).toBe("unknown");
+  });
+
+  it("falls back to 'unknown' when the mainnetBetaPubkey doesn't match any mainnet validator", () => {
+    const result = resolveBridgedName(
+      "mainnet-id-unmatched",
+      undefined,
+      new Map([["mainnet-id-1", "mainnet-vote-1"]]),
+      new Map([["mainnet-vote-1", "Stakewiz Name"]])
+    );
+    expect(result).toBe("unknown");
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -65,11 +117,22 @@ describe("loadEnrichedValidators", () => {
     expect(result[0].softwareClient).toBe("Agave");
   });
 
-  it("testnet: matches SFDP by testnetPubkey, uses SFDP name, never calls Stakewiz", async () => {
-    mockReadFile.mockResolvedValue(
-      JSON.stringify([{ ...rawValidator, identityPubkey: "tid1" }])
-    );
+  it("testnet: prefers SFDP's own name field over the mainnet bridge when present", async () => {
+    mockReadFile.mockImplementation((filePath: string) => {
+      if (filePath.includes("testnet-validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([{ ...rawValidator, identityPubkey: "tid1" }])
+        );
+      }
+      if (filePath.includes("validators.json")) {
+        return Promise.resolve(JSON.stringify([rawValidator]));
+      }
+      return Promise.reject(new Error(`unexpected read: ${filePath}`));
+    });
     mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) {
+        return jsonResponse([{ vote_identity: "vote1", name: "Alice" }]);
+      }
       if (url.includes("sfdp_participants")) {
         return jsonResponse([
           { mainnetBetaPubkey: "id1", testnetPubkey: "tid1", state: "Approved", name: "Alice SFDP" },
@@ -87,14 +150,133 @@ describe("loadEnrichedValidators", () => {
     expect(result[0].sfdpState).toBe("Approved");
 
     const fetchedUrls = mockFetch.mock.calls.map((c) => String(c[0]));
-    expect(fetchedUrls.some((u) => u.includes("stakewiz"))).toBe(false);
+    expect(fetchedUrls.some((u) => u.includes("stakewiz"))).toBe(true);
     expect(
       fetchedUrls.some((u) => u.includes("validators.app/api/v1/validators/testnet.json"))
     ).toBe(true);
-    expect(mockReadFile).toHaveBeenCalledWith(
-      expect.stringContaining("testnet-validators.json"),
-      "utf-8"
-    );
+  });
+
+  it("testnet: resolves a name via the mainnet bridge when SFDP has no own name", async () => {
+    mockReadFile.mockImplementation((filePath: string) => {
+      if (filePath.includes("testnet-validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([{ ...rawValidator, identityPubkey: "tid1" }])
+        );
+      }
+      if (filePath.includes("validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([
+            { ...rawValidator, identityPubkey: "id1", voteAccountPubkey: "mvote1" },
+          ])
+        );
+      }
+      return Promise.reject(new Error(`unexpected read: ${filePath}`));
+    });
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) {
+        return jsonResponse([{ vote_identity: "mvote1", name: "Alice" }]);
+      }
+      if (url.includes("sfdp_participants")) {
+        return jsonResponse([
+          { mainnetBetaPubkey: "id1", testnetPubkey: "tid1", state: "Approved", name: "" },
+        ]);
+      }
+      if (url.includes("validators.app")) {
+        return jsonResponse([]);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await loadEnrichedValidators("testnet");
+    expect(result[0].name).toBe("Alice");
+  });
+
+  it("testnet: falls back to 'private validator' when the bridge resolves but Stakewiz has no name", async () => {
+    mockReadFile.mockImplementation((filePath: string) => {
+      if (filePath.includes("testnet-validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([{ ...rawValidator, identityPubkey: "tid1" }])
+        );
+      }
+      if (filePath.includes("validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([
+            { ...rawValidator, identityPubkey: "id1", voteAccountPubkey: "mvote1" },
+          ])
+        );
+      }
+      return Promise.reject(new Error(`unexpected read: ${filePath}`));
+    });
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) {
+        return jsonResponse([{ vote_identity: "mvote1", name: "" }]);
+      }
+      if (url.includes("sfdp_participants")) {
+        return jsonResponse([
+          { mainnetBetaPubkey: "id1", testnetPubkey: "tid1", state: "Approved", name: "" },
+        ]);
+      }
+      if (url.includes("validators.app")) {
+        return jsonResponse([]);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await loadEnrichedValidators("testnet");
+    expect(result[0].name).toBe("private validator");
+  });
+
+  it("testnet: falls back to 'unknown' when there is no SFDP record for the validator", async () => {
+    mockReadFile.mockImplementation((filePath: string) => {
+      if (filePath.includes("testnet-validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([{ ...rawValidator, identityPubkey: "tid-unmatched" }])
+        );
+      }
+      if (filePath.includes("validators.json")) {
+        return Promise.resolve(JSON.stringify([]));
+      }
+      return Promise.reject(new Error(`unexpected read: ${filePath}`));
+    });
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) return jsonResponse([]);
+      if (url.includes("sfdp_participants")) return jsonResponse([]);
+      if (url.includes("validators.app")) return jsonResponse([]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await loadEnrichedValidators("testnet");
+    expect(result[0].name).toBe("unknown");
+    expect(result[0].sfdp).toBe(false);
+  });
+
+  it("testnet: falls back to 'unknown' when the SFDP mainnetBetaPubkey doesn't match any current mainnet validator", async () => {
+    mockReadFile.mockImplementation((filePath: string) => {
+      if (filePath.includes("testnet-validators.json")) {
+        return Promise.resolve(
+          JSON.stringify([{ ...rawValidator, identityPubkey: "tid1" }])
+        );
+      }
+      if (filePath.includes("validators.json")) {
+        return Promise.resolve(JSON.stringify([]));
+      }
+      return Promise.reject(new Error(`unexpected read: ${filePath}`));
+    });
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) return jsonResponse([]);
+      if (url.includes("sfdp_participants")) {
+        return jsonResponse([
+          { mainnetBetaPubkey: "id-retired", testnetPubkey: "tid1", state: "Retired", name: "" },
+        ]);
+      }
+      if (url.includes("validators.app")) return jsonResponse([]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const result = await loadEnrichedValidators("testnet");
+    expect(result[0].name).toBe("unknown");
+    expect(result[0].sfdp).toBe(true);
+    expect(result[0].sfdpState).toBe("Retired");
   });
 
   it("devnet: makes no enrichment fetches and sets fallback fields", async () => {
