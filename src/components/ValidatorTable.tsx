@@ -7,13 +7,17 @@ import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup, compareVersionsDesc } from "../utils/versionParser";
 import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
+import { Network, NETWORK_CONFIGS } from "../lib/network";
+import { buildFilterQueryString } from "../utils/filterQueryString";
 
 export default function ValidatorTable({
   initialData,
   unstakedVersionCounts = {},
+  network,
 }: {
   initialData: Validator[];
   unstakedVersionCounts?: Record<string, number>;
+  network: Network;
 }) {
   const searchParams = useSearchParams();
   const [validators] = useState<Validator[]>(initialData);
@@ -35,6 +39,10 @@ export default function ValidatorTable({
     isVisible: boolean;
     isError: boolean;
   }>({ message: "", isVisible: false, isError: false });
+
+  const networkConfig = NETWORK_CONFIGS[network];
+  const hasSfdp = networkConfig.sfdpKeyField !== null;
+  const hasInfrastructure = networkConfig.validatorsAppUrl !== null;
 
   const handleCopySuccess = (message: string) => {
     setCopyNotification({ message, isVisible: true, isError: false });
@@ -90,37 +98,24 @@ export default function ValidatorTable({
 
   // Update URL when filters change
   useEffect(() => {
-    const params = new URLSearchParams();
-
-    if (selectedVersions.size > 0) {
-      params.set('versions', Array.from(selectedVersions).join(','));
-    }
-    if (sfdpFilter !== 'all') {
-      params.set('sfdp', sfdpFilter);
-    }
-    if (sortCfg.key !== 'activatedStake' || sortCfg.dir !== 'desc') {
-      params.set('sort', sortCfg.key);
-      params.set('sortDir', sortCfg.dir);
-    }
-    if (selectedClients.size > 0) {
-      params.set('clients', Array.from(selectedClients).join(','));
-    }
-    if (selectedAsns.size > 0) {
-      params.set('asns', Array.from(selectedAsns).join(','));
-    }
-    if (selectedDataCenters.size > 0) {
-      params.set('datacenters', encodeURIComponent(Array.from(selectedDataCenters).join(',')));
-    }
-    if (showUnstaked) {
-      params.set('unstaked', '1');
-    }
-
-    const queryString = params.toString();
+    const queryString = buildFilterQueryString(
+      {
+        selectedVersions,
+        sfdpFilter,
+        sortKey: sortCfg.key,
+        sortDir: sortCfg.dir,
+        selectedClients,
+        selectedAsns,
+        selectedDataCenters,
+        showUnstaked,
+      },
+      network
+    );
     const newUrl = queryString ? `?${queryString}` : window.location.pathname;
 
     // Update URL without causing a page reload
     window.history.replaceState({}, '', newUrl);
-  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters, showUnstaked]);
+  }, [selectedVersions, sfdpFilter, sortCfg, selectedClients, selectedAsns, selectedDataCenters, showUnstaked, network]);
 
   // Get unique versions with their stake percentages, including groups
   const versionStats = useMemo(() => {
@@ -417,7 +412,8 @@ export default function ValidatorTable({
     setSelectedDataCenters(new Set());
     setShowInfrastructureFilter(false);
     // Clear URL parameters
-    window.history.replaceState({}, '', window.location.pathname);
+    const base = network !== "mainnet" ? `?network=${network}` : window.location.pathname;
+    window.history.replaceState({}, '', base);
   };
 
   // CSV Export Helper Functions
@@ -525,39 +521,45 @@ export default function ValidatorTable({
           >
             Unstaked Nodes {showUnstaked ? '✓' : ''}
           </button>
-          <button
-            onClick={() => setShowInfrastructure(!showInfrastructure)}
-            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
-          >
-            Infrastructure Columns {showInfrastructure ? '✓' : ''}
-          </button>
-          <button
-            onClick={() => setShowInfrastructureFilter(!showInfrastructureFilter)}
-            className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors flex items-center gap-1"
-          >
-            <span>Infrastructure Filters</span>
-            <span className={`transition-transform duration-200 ${showInfrastructureFilter ? 'rotate-180' : ''}`}>
-              ▼
-            </span>
-          </button>
+          {hasInfrastructure && (
+            <>
+              <button
+                onClick={() => setShowInfrastructure(!showInfrastructure)}
+                className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors"
+              >
+                Infrastructure Columns {showInfrastructure ? '✓' : ''}
+              </button>
+              <button
+                onClick={() => setShowInfrastructureFilter(!showInfrastructureFilter)}
+                className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-900 rounded transition-colors flex items-center gap-1"
+              >
+                <span>Infrastructure Filters</span>
+                <span className={`transition-transform duration-200 ${showInfrastructureFilter ? 'rotate-180' : ''}`}>
+                  ▼
+                </span>
+              </button>
+            </>
+          )}
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-900">
-          SFDP Filter:
-          <select
-            className="border rounded px-2 py-1 text-sm bg-white text-gray-900"
-            value={sfdpFilter}
-            onChange={(e) => setSfdpFilter(e.target.value)}
-          >
-            <option value="all">All Validators</option>
-            <option value="sfdp">SFDP Participants</option>
-            <option value="non-sfdp">Non-SFDP</option>
-            {sfdpStates.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
-        </label>
+        {hasSfdp && (
+          <label className="flex items-center gap-2 text-sm text-gray-900">
+            SFDP Filter:
+            <select
+              className="border rounded px-2 py-1 text-sm bg-white text-gray-900"
+              value={sfdpFilter}
+              onChange={(e) => setSfdpFilter(e.target.value)}
+            >
+              <option value="all">All Validators</option>
+              <option value="sfdp">SFDP Participants</option>
+              <option value="non-sfdp">Non-SFDP</option>
+              {sfdpStates.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="text-sm text-gray-700">
           Matching stake: <strong>{pct}%</strong>
           {sfdpFilter !== "all" && (
@@ -672,7 +674,7 @@ export default function ValidatorTable({
         </div>
       )}
 
-      {showInfrastructureFilter && (
+      {showInfrastructureFilter && hasInfrastructure && (
         <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Software Client Section */}
