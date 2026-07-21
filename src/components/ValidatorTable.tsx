@@ -749,7 +749,7 @@ export default function ValidatorTable({
       )}
 
       {sorted.length === 0 ? (
-        <p className="text-center text-gray-500">No data found. Update <code>data/validators.json</code> and refresh.</p>
+        <p className="text-center text-gray-500">No data found. Update <code>data/{networkConfig.validatorsFile}</code> and refresh.</p>
       ) : (
         <table className="min-w-full text-sm text-gray-900">
           <ValidatorTableHeader

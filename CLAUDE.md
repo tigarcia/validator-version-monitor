@@ -61,9 +61,12 @@ npm test
   activatedStake: number;
   version: string;
   delinquent: boolean;
-  name: string;           // from Stakewiz
+  name: string;           // from Stakewiz (mainnet) or SFDP (testnet)
   sfdp: boolean;          // from SFDP API
   sfdpState: string | null; // from SFDP API
+  autonomousSystemNumber: number | null; // from validators.app
+  dataCenterKey: string | null;          // from validators.app
+  softwareClient: string | null;         // from validators.app
 }
 ```
 
