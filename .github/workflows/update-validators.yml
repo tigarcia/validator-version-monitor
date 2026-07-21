@@ -1,4 +1,4 @@
-name: Update validators.json
+name: Update validator data
 
 on:
   schedule:
@@ -16,25 +16,40 @@ jobs:
 
       - name: Install Solana CLI
         run: |
-          SOLANA_VERSION=v3.0.6
           sh -c "$(curl -sSfL https://release.anza.xyz/v3.0.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
-      - name: Generate validators.json
+      - name: Generate data files
         run: |
-          solana -um validators --output json-compact > data/validators.json
-
-      - name: Generate gossip.json
-        run: |
-          solana -um gossip --output json > data/gossip.json
+          # Each network updates independently: write to a temp file and only
+          # replace the committed file if the CLI succeeded and produced valid
+          # JSON, so a flaky testnet/devnet RPC can't wipe a file or block the
+          # other networks.
+          update() {
+            local file="$1"; shift
+            local tmp
+            tmp=$(mktemp)
+            if solana "$@" > "$tmp" && jq -e . "$tmp" > /dev/null; then
+              mv "$tmp" "data/$file"
+            else
+              echo "WARN: failed to update data/$file; keeping previous version"
+              rm -f "$tmp"
+            fi
+          }
+          update validators.json         -um validators --output json-compact
+          update gossip.json             -um gossip --output json
+          update testnet-validators.json -ut validators --output json-compact
+          update testnet-gossip.json     -ut gossip --output json-compact
+          update devnet-validators.json  -ud validators --output json-compact
+          update devnet-gossip.json      -ud gossip --output json-compact
 
       - name: Commit and push if changed
         run: |
-          if [[ -n "$(git status --porcelain data/validators.json data/gossip.json)" ]]; then
+          if [[ -n "$(git status --porcelain data/)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/validators.json data/gossip.json
-            git commit -m "update validators.json $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            git add data/
+            git commit -m "update validator data $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
             git push
           else
             echo "No changes; skipping commit."

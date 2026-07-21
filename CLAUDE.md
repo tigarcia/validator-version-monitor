@@ -20,23 +20,26 @@ npm start
 
 # Run linter
 npm run lint
+
+# Run unit tests (vitest)
+npm test
 ```
 
 ## Architecture
 
 ### Data Flow
 
-1. **Validator Data Source**: `data/validators.json` is automatically updated hourly via GitHub Actions (`.github/workflows/update-validators.yml`), which fetches data from Solana mainnet using `solana -um validators --output json-compact`.
+1. **Validator Data Source**: `data/*.json` files are automatically updated hourly via GitHub Actions (`.github/workflows/update-validators.yml`) using the Solana CLI. Per network: `validators.json`/`gossip.json` (mainnet, `-um`), `testnet-validators.json`/`testnet-gossip.json` (`-ut`), `devnet-validators.json`/`devnet-gossip.json` (`-ud`).
 
-2. **Data Enrichment**: The app enriches validator data from two external APIs:
-   - **Stakewiz API** (`https://api.stakewiz.com/validators`) - provides validator names
-   - **SFDP API** (`https://api.solana.org/api/community/v1/sfdp_participants`) - provides SFDP participation status
+2. **Data Enrichment**: The app enriches validator data from external APIs, gated by network:
+   - **Stakewiz API** (`https://api.stakewiz.com/validators`) - provides validator names (mainnet only)
+   - **SFDP API** (`https://api.solana.org/api/community/v1/sfdp_participants`) - provides SFDP participation status (mainnet via `mainnetBetaPubkey`, testnet via `testnetPubkey`; also supplies names on testnet)
+   - **validators.app API** (`https://www.validators.app/api/v1/validators/{network}.json`) - provides infrastructure info (ASN, data center, software client) for mainnet and testnet
 
-3. **Enrichment Pattern**: Both `src/app/page.tsx` (server component) and `src/app/api/validators/route.ts` (API route) implement the same enrichment logic:
-   - Load validators from `data/validators.json`
-   - Fetch Stakewiz data and create a map by `vote_identity`
-   - Fetch SFDP data and create a map by `mainnetBetaPubkey`
-   - Merge data into validators using identity/vote account lookups
+3. **Enrichment Pattern**: Enrichment logic lives in the shared `src/lib/validatorData.ts` module, used by both `src/app/page.tsx` (server component) and `src/app/api/validators/route.ts` (API route). It is network-aware, driven by the per-network config in `src/lib/network.ts`:
+   - **mainnet**: Stakewiz (names) + SFDP (participation) + validators.app (infrastructure)
+   - **testnet**: SFDP only, keyed by `testnetPubkey` (also supplies names) + validators.app (infrastructure)
+   - **devnet**: raw data only - no external enrichment, names default to "unknown"
 
 ### Component Structure
 
@@ -58,9 +61,12 @@ npm run lint
   activatedStake: number;
   version: string;
   delinquent: boolean;
-  name: string;           // from Stakewiz
+  name: string;           // from Stakewiz (mainnet) or SFDP (testnet)
   sfdp: boolean;          // from SFDP API
   sfdpState: string | null; // from SFDP API
+  autonomousSystemNumber: number | null; // from validators.app
+  dataCenterKey: string | null;          // from validators.app
+  softwareClient: string | null;         // from validators.app
 }
 ```
 
@@ -86,4 +92,4 @@ npm run lint
 - Path alias `@/*` maps to `./src/*`
 - The app uses both server and client components strategically (server for data fetching, client for interactivity)
 - SFDP stake calculations only count "Approved" state validators
-- Validator data file is auto-generated - do not manually edit `data/validators.json`
+- Validator data files are auto-generated - do not manually edit any of the six `data/*.json` files (`validators.json`, `gossip.json`, `testnet-validators.json`, `testnet-gossip.json`, `devnet-validators.json`, `devnet-gossip.json`)
