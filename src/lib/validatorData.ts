@@ -80,7 +80,9 @@ export async function loadEnrichedValidators(
   const stakewizMap = new Map<string, string>();
   if (needsStakewiz) {
     try {
-      const response = await fetch("https://api.stakewiz.com/validators");
+      const response = await fetch("https://api.stakewiz.com/validators", {
+        signal: AbortSignal.timeout(10000),
+      });
       const data: StakewizValidator[] = await response.json();
       data.forEach((v) => stakewizMap.set(v.vote_identity, v.name));
     } catch (error) {
@@ -159,17 +161,25 @@ export async function loadEnrichedValidators(
     const infraInfo = infraMap.get(v.voteAccountPubkey);
 
     let name: string;
-    if (config.nameSource === "stakewiz-direct") {
-      name = stakewizMap.get(v.voteAccountPubkey) || "private validator";
-    } else if (config.nameSource === "sfdp-mainnet-bridge") {
-      name = resolveBridgedName(
-        sfdpInfo?.mainnetBetaPubkey,
-        sfdpInfo?.name,
-        mainnetIdentityToVote,
-        stakewizMap
-      );
-    } else {
-      name = "unknown";
+    switch (config.nameSource) {
+      case "stakewiz-direct":
+        name = stakewizMap.get(v.voteAccountPubkey) || "private validator";
+        break;
+      case "sfdp-mainnet-bridge":
+        name = resolveBridgedName(
+          sfdpInfo?.mainnetBetaPubkey,
+          sfdpInfo?.name,
+          mainnetIdentityToVote,
+          stakewizMap
+        );
+        break;
+      case "none":
+        name = "unknown";
+        break;
+      default: {
+        const exhaustiveCheck: never = config.nameSource;
+        throw new Error(`Unhandled nameSource: ${exhaustiveCheck}`);
+      }
     }
 
     return {

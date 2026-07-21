@@ -32,14 +32,14 @@ npm test
 1. **Validator Data Source**: `data/*.json` files are automatically updated hourly via GitHub Actions (`.github/workflows/update-validators.yml`) using the Solana CLI. Per network: `validators.json`/`gossip.json` (mainnet, `-um`), `testnet-validators.json`/`testnet-gossip.json` (`-ut`), `devnet-validators.json`/`devnet-gossip.json` (`-ud`).
 
 2. **Data Enrichment**: The app enriches validator data from external APIs, gated by network:
-   - **Stakewiz API** (`https://api.stakewiz.com/validators`) - provides validator names (mainnet only)
-   - **SFDP API** (`https://api.solana.org/api/community/v1/sfdp_participants`) - provides SFDP participation status (mainnet via `mainnetBetaPubkey`, testnet via `testnetPubkey`; also supplies names on testnet)
+   - **Stakewiz API** (`https://api.stakewiz.com/validators`) - provides validator names, keyed by `vote_identity` (a vote account pubkey despite the field name). Fetched for both mainnet and testnet.
+   - **SFDP API** (`https://api.solana.org/api/community/v1/sfdp_participants`) - provides SFDP participation status (mainnet via `mainnetBetaPubkey`, testnet via `testnetPubkey`). The API's own `name` field is not populated in practice today, so it is not relied on for testnet names.
    - **validators.app API** (`https://www.validators.app/api/v1/validators/{network}.json`) - provides infrastructure info (ASN, data center, software client) for mainnet and testnet
 
-3. **Enrichment Pattern**: Enrichment logic lives in the shared `src/lib/validatorData.ts` module, used by both `src/app/page.tsx` (server component) and `src/app/api/validators/route.ts` (API route). It is network-aware, driven by the per-network config in `src/lib/network.ts`:
-   - **mainnet**: Stakewiz (names) + SFDP (participation) + validators.app (infrastructure)
-   - **testnet**: SFDP only, keyed by `testnetPubkey` (also supplies names) + validators.app (infrastructure)
-   - **devnet**: raw data only - no external enrichment, names default to "unknown"
+3. **Enrichment Pattern**: Enrichment logic lives in the shared `src/lib/validatorData.ts` module, used by both `src/app/page.tsx` (server component) and `src/app/api/validators/route.ts` (API route). It is network-aware, driven by `NetworkConfig.nameSource` in `src/lib/network.ts`:
+   - **mainnet** (`nameSource: "stakewiz-direct"`): Stakewiz name looked up directly by the validator's own vote account, + SFDP (participation) + validators.app (infrastructure)
+   - **testnet** (`nameSource: "sfdp-mainnet-bridge"`): names are resolved via `resolveBridgedName` in `validatorData.ts`, which chains testnet `identityPubkey` → SFDP record (matched on `testnetPubkey`) → that record's `mainnetBetaPubkey` → mainnet's own `data/validators.json` (matched on `identityPubkey`) → mainnet `voteAccountPubkey` → Stakewiz name. Falls back to `"private validator"` if the chain resolves to a real mainnet validator with no Stakewiz name, or `"unknown"` if the chain doesn't resolve at all. Also has SFDP (participation) + validators.app (infrastructure).
+   - **devnet** (`nameSource: "none"`): raw data only - no external enrichment, names default to "unknown"
 
 ### Component Structure
 
@@ -61,7 +61,7 @@ npm test
   activatedStake: number;
   version: string;
   delinquent: boolean;
-  name: string;           // from Stakewiz (mainnet) or SFDP (testnet)
+  name: string;           // from Stakewiz directly (mainnet) or via the mainnet bridge (testnet, see Enrichment Pattern)
   sfdp: boolean;          // from SFDP API
   sfdpState: string | null; // from SFDP API
   autonomousSystemNumber: number | null; // from validators.app
