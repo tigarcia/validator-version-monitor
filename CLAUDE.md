@@ -74,7 +74,7 @@ npm test
 
 **URL State Management**: Filter and sort state is persisted to URL query parameters in `ValidatorTable.tsx` using `URLSearchParams` and `window.history.replaceState()`. This allows sharing filtered views.
 
-**Version Filtering**: Versions are parsed as semantic versions and sorted in descending order. The filter UI splits versions into two columns for better UX.
+**Version Filtering**: Versions are grouped by minor version (`src/utils/versionParser.ts`) and sorted in descending order. Real Agave releases parse as plain semver. Firedancer-style client versions encode their true Agave-compatible version as a 5-digit `MMmmpp` code in their last dot-segment (e.g. `1.100.0-beta.40201` → Agave `4.2.1`) and are grouped/sorted by that decoded version instead of their own literal numbering. The filter UI renders these minor-version groups in a responsive grid.
 
 **Key Converter** (`/convert`): Detects whether input keys are identity or vote accounts and converts them to the opposite type by looking up the validator dataset. Handles mixed input intelligently by determining the majority type.
 

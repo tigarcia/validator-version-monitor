@@ -32,6 +32,10 @@ describe("isFiredancerVersion", () => {
   it("returns false for fewer than 3 segments", () => {
     expect(isFiredancerVersion("4.2")).toBe(false);
   });
+
+  it("returns false for a 6-digit last segment", () => {
+    expect(isFiredancerVersion("0.811.301080")).toBe(false);
+  });
 });
 
 describe("parseVersion", () => {
