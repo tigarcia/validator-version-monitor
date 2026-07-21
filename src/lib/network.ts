@@ -5,7 +5,7 @@ export const NETWORKS: Network[] = ["mainnet", "testnet", "devnet"];
 export interface NetworkConfig {
   validatorsFile: string;
   gossipFile: string;
-  stakewiz: boolean;
+  nameSource: "stakewiz-direct" | "sfdp-mainnet-bridge" | "none";
   sfdpKeyField: "mainnetBetaPubkey" | "testnetPubkey" | null;
   validatorsAppUrl: string | null;
 }
@@ -14,7 +14,7 @@ export const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
   mainnet: {
     validatorsFile: "validators.json",
     gossipFile: "gossip.json",
-    stakewiz: true,
+    nameSource: "stakewiz-direct",
     sfdpKeyField: "mainnetBetaPubkey",
     validatorsAppUrl:
       "https://www.validators.app/api/v1/validators/mainnet.json?limit=9999",
@@ -22,7 +22,7 @@ export const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
   testnet: {
     validatorsFile: "testnet-validators.json",
     gossipFile: "testnet-gossip.json",
-    stakewiz: false,
+    nameSource: "sfdp-mainnet-bridge",
     sfdpKeyField: "testnetPubkey",
     validatorsAppUrl:
       "https://www.validators.app/api/v1/validators/testnet.json?limit=9999",
@@ -30,7 +30,7 @@ export const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
   devnet: {
     validatorsFile: "devnet-validators.json",
     gossipFile: "devnet-gossip.json",
-    stakewiz: false,
+    nameSource: "none",
     sfdpKeyField: null,
     validatorsAppUrl: null,
   },

@@ -41,6 +41,28 @@ async function readDataFile<T>(fileName: string): Promise<T | null> {
   }
 }
 
+function parseValidatorsFile(
+  json: Validator[] | { validators?: Validator[] } | null
+): Validator[] {
+  if (!json) return [];
+  return Array.isArray(json) ? json : json.validators ?? [];
+}
+
+export function resolveBridgedName(
+  mainnetBetaPubkey: string | undefined,
+  sfdpOwnName: string | undefined,
+  mainnetIdentityToVote: Map<string, string>,
+  stakewizByVote: Map<string, string>
+): string {
+  if (sfdpOwnName) return sfdpOwnName;
+  const voteAccount =
+    mainnetBetaPubkey && mainnetIdentityToVote.get(mainnetBetaPubkey);
+  if (voteAccount) {
+    return stakewizByVote.get(voteAccount) || "private validator";
+  }
+  return "unknown";
+}
+
 export async function loadEnrichedValidators(
   network: Network
 ): Promise<Validator[]> {
@@ -48,15 +70,19 @@ export async function loadEnrichedValidators(
   const json = await readDataFile<Validator[] | { validators?: Validator[] }>(
     config.validatorsFile
   );
-  const validators: Validator[] = Array.isArray(json)
-    ? json
-    : json?.validators ?? [];
+  const validators = parseValidatorsFile(json);
   if (validators.length === 0) return [];
 
+  const needsStakewiz =
+    config.nameSource === "stakewiz-direct" ||
+    config.nameSource === "sfdp-mainnet-bridge";
+
   const stakewizMap = new Map<string, string>();
-  if (config.stakewiz) {
+  if (needsStakewiz) {
     try {
-      const response = await fetch("https://api.stakewiz.com/validators");
+      const response = await fetch("https://api.stakewiz.com/validators", {
+        signal: AbortSignal.timeout(10000),
+      });
       const data: StakewizValidator[] = await response.json();
       data.forEach((v) => stakewizMap.set(v.vote_identity, v.name));
     } catch (error) {
@@ -64,7 +90,10 @@ export async function loadEnrichedValidators(
     }
   }
 
-  const sfdpMap = new Map<string, { state: string; name: string }>();
+  const sfdpMap = new Map<
+    string,
+    { state: string; name: string; mainnetBetaPubkey: string }
+  >();
   if (config.sfdpKeyField) {
     try {
       const response = await fetch(
@@ -73,11 +102,27 @@ export async function loadEnrichedValidators(
       const data: SfdpParticipant[] = await response.json();
       data.forEach((p) => {
         const key = p[config.sfdpKeyField!];
-        if (key) sfdpMap.set(key, { state: p.state, name: p.name });
+        if (key) {
+          sfdpMap.set(key, {
+            state: p.state,
+            name: p.name,
+            mainnetBetaPubkey: p.mainnetBetaPubkey,
+          });
+        }
       });
     } catch (error) {
       console.error("Error fetching SFDP data:", error);
     }
+  }
+
+  const mainnetIdentityToVote = new Map<string, string>();
+  if (config.nameSource === "sfdp-mainnet-bridge") {
+    const mainnetJson = await readDataFile<
+      Validator[] | { validators?: Validator[] }
+    >(NETWORK_CONFIGS.mainnet.validatorsFile);
+    parseValidatorsFile(mainnetJson).forEach((v) =>
+      mainnetIdentityToVote.set(v.identityPubkey, v.voteAccountPubkey)
+    );
   }
 
   const infraMap = new Map<
@@ -114,9 +159,29 @@ export async function loadEnrichedValidators(
   return validators.map((v) => {
     const sfdpInfo = sfdpMap.get(v.identityPubkey);
     const infraInfo = infraMap.get(v.voteAccountPubkey);
-    const name = config.stakewiz
-      ? stakewizMap.get(v.voteAccountPubkey) || "private validator"
-      : sfdpInfo?.name || "unknown";
+
+    let name: string;
+    switch (config.nameSource) {
+      case "stakewiz-direct":
+        name = stakewizMap.get(v.voteAccountPubkey) || "private validator";
+        break;
+      case "sfdp-mainnet-bridge":
+        name = resolveBridgedName(
+          sfdpInfo?.mainnetBetaPubkey,
+          sfdpInfo?.name,
+          mainnetIdentityToVote,
+          stakewizMap
+        );
+        break;
+      case "none":
+        name = "unknown";
+        break;
+      default: {
+        const exhaustiveCheck: never = config.nameSource;
+        throw new Error(`Unhandled nameSource: ${exhaustiveCheck}`);
+      }
+    }
+
     return {
       ...v,
       name,
