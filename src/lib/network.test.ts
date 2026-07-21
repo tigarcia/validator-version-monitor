@@ -43,10 +43,10 @@ describe("NETWORK_CONFIGS", () => {
     expect(NETWORK_CONFIGS.devnet.gossipFile).toBe("devnet-gossip.json");
   });
 
-  it("only mainnet uses Stakewiz", () => {
-    expect(NETWORK_CONFIGS.mainnet.stakewiz).toBe(true);
-    expect(NETWORK_CONFIGS.testnet.stakewiz).toBe(false);
-    expect(NETWORK_CONFIGS.devnet.stakewiz).toBe(false);
+  it("uses the right name resolution strategy per network", () => {
+    expect(NETWORK_CONFIGS.mainnet.nameSource).toBe("stakewiz-direct");
+    expect(NETWORK_CONFIGS.testnet.nameSource).toBe("sfdp-mainnet-bridge");
+    expect(NETWORK_CONFIGS.devnet.nameSource).toBe("none");
   });
 
   it("matches SFDP by the right pubkey field", () => {
