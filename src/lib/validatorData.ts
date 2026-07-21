@@ -1,7 +1,36 @@
 import fs from "fs/promises";
 import path from "path";
 import { Validator } from "../types/validator";
-import { Network, NETWORK_CONFIGS } from "./network";
+import { Network, NetworkConfig, NETWORK_CONFIGS } from "./network";
+
+// data/*.json only refreshes hourly, so short-lived caching of the external
+// enrichment sources doesn't add meaningful staleness but avoids repeating
+// ~3s of external HTTP round-trips on every network switch. Cached in-process
+// (rather than via Next.js's `fetch` data cache) because the Stakewiz and
+// SFDP payloads exceed that cache's 2MB per-item limit.
+const ENRICHMENT_CACHE_TTL_MS = 60_000;
+const enrichmentResponseCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+export function clearEnrichmentCache(): void {
+  enrichmentResponseCache.clear();
+}
+
+async function fetchJsonCached<T>(url: string, init: RequestInit): Promise<T> {
+  const cached = enrichmentResponseCache.get(url);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data as T;
+  }
+  const response = await fetch(url, { ...init, cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`${url} responded with ${response.status}`);
+  }
+  const data = (await response.json()) as T;
+  enrichmentResponseCache.set(url, {
+    data,
+    expiresAt: Date.now() + ENRICHMENT_CACHE_TTL_MS,
+  });
+  return data;
+}
 
 interface StakewizValidator {
   vote_identity: string;
@@ -63,6 +92,106 @@ export function resolveBridgedName(
   return "unknown";
 }
 
+async function fetchStakewizMap(needed: boolean): Promise<Map<string, string>> {
+  const stakewizMap = new Map<string, string>();
+  if (!needed) return stakewizMap;
+  try {
+    const data = await fetchJsonCached<StakewizValidator[]>(
+      "https://api.stakewiz.com/validators",
+      { signal: AbortSignal.timeout(10000) }
+    );
+    data.forEach((v) => stakewizMap.set(v.vote_identity, v.name));
+  } catch (error) {
+    console.error("Error fetching Stakewiz data:", error);
+  }
+  return stakewizMap;
+}
+
+async function fetchSfdpMap(
+  config: NetworkConfig
+): Promise<Map<string, { state: string; name: string; mainnetBetaPubkey: string }>> {
+  const sfdpMap = new Map<
+    string,
+    { state: string; name: string; mainnetBetaPubkey: string }
+  >();
+  if (!config.sfdpKeyField) return sfdpMap;
+  try {
+    const data = await fetchJsonCached<SfdpParticipant[]>(
+      "https://api.solana.org/api/community/v1/sfdp_participants",
+      { signal: AbortSignal.timeout(10000) }
+    );
+    data.forEach((p) => {
+      const key = p[config.sfdpKeyField!];
+      if (key) {
+        sfdpMap.set(key, {
+          state: p.state,
+          name: p.name,
+          mainnetBetaPubkey: p.mainnetBetaPubkey,
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching SFDP data:", error);
+  }
+  return sfdpMap;
+}
+
+async function loadMainnetIdentityToVote(
+  config: NetworkConfig
+): Promise<Map<string, string>> {
+  const mainnetIdentityToVote = new Map<string, string>();
+  if (config.nameSource !== "sfdp-mainnet-bridge") return mainnetIdentityToVote;
+  const mainnetJson = await readDataFile<
+    Validator[] | { validators?: Validator[] }
+  >(NETWORK_CONFIGS.mainnet.validatorsFile);
+  parseValidatorsFile(mainnetJson).forEach((v) =>
+    mainnetIdentityToVote.set(v.identityPubkey, v.voteAccountPubkey)
+  );
+  return mainnetIdentityToVote;
+}
+
+async function fetchInfraMap(config: NetworkConfig): Promise<
+  Map<
+    string,
+    {
+      autonomousSystemNumber: number | null;
+      dataCenterKey: string | null;
+      softwareClient: string | null;
+    }
+  >
+> {
+  const infraMap = new Map<
+    string,
+    {
+      autonomousSystemNumber: number | null;
+      dataCenterKey: string | null;
+      softwareClient: string | null;
+    }
+  >();
+  if (!config.validatorsAppUrl) return infraMap;
+  try {
+    const data = await fetchJsonCached<ValidatorsAppValidator[]>(
+      config.validatorsAppUrl,
+      {
+        headers: {
+          Token: process.env.VALIDATORS_APP_API_KEY || "",
+        },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    data.forEach((v) =>
+      infraMap.set(v.vote_account, {
+        autonomousSystemNumber: v.autonomous_system_number,
+        dataCenterKey: v.data_center_key,
+        softwareClient: v.software_client,
+      })
+    );
+  } catch (error) {
+    console.error("Error fetching validators.app data:", error);
+  }
+  return infraMap;
+}
+
 export async function loadEnrichedValidators(
   network: Network
 ): Promise<Validator[]> {
@@ -77,84 +206,13 @@ export async function loadEnrichedValidators(
     config.nameSource === "stakewiz-direct" ||
     config.nameSource === "sfdp-mainnet-bridge";
 
-  const stakewizMap = new Map<string, string>();
-  if (needsStakewiz) {
-    try {
-      const response = await fetch("https://api.stakewiz.com/validators", {
-        signal: AbortSignal.timeout(10000),
-      });
-      const data: StakewizValidator[] = await response.json();
-      data.forEach((v) => stakewizMap.set(v.vote_identity, v.name));
-    } catch (error) {
-      console.error("Error fetching Stakewiz data:", error);
-    }
-  }
-
-  const sfdpMap = new Map<
-    string,
-    { state: string; name: string; mainnetBetaPubkey: string }
-  >();
-  if (config.sfdpKeyField) {
-    try {
-      const response = await fetch(
-        "https://api.solana.org/api/community/v1/sfdp_participants"
-      );
-      const data: SfdpParticipant[] = await response.json();
-      data.forEach((p) => {
-        const key = p[config.sfdpKeyField!];
-        if (key) {
-          sfdpMap.set(key, {
-            state: p.state,
-            name: p.name,
-            mainnetBetaPubkey: p.mainnetBetaPubkey,
-          });
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching SFDP data:", error);
-    }
-  }
-
-  const mainnetIdentityToVote = new Map<string, string>();
-  if (config.nameSource === "sfdp-mainnet-bridge") {
-    const mainnetJson = await readDataFile<
-      Validator[] | { validators?: Validator[] }
-    >(NETWORK_CONFIGS.mainnet.validatorsFile);
-    parseValidatorsFile(mainnetJson).forEach((v) =>
-      mainnetIdentityToVote.set(v.identityPubkey, v.voteAccountPubkey)
-    );
-  }
-
-  const infraMap = new Map<
-    string,
-    {
-      autonomousSystemNumber: number | null;
-      dataCenterKey: string | null;
-      softwareClient: string | null;
-    }
-  >();
-  if (config.validatorsAppUrl) {
-    try {
-      const response = await fetch(config.validatorsAppUrl, {
-        headers: {
-          Token: process.env.VALIDATORS_APP_API_KEY || "",
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (response.ok) {
-        const data: ValidatorsAppValidator[] = await response.json();
-        data.forEach((v) =>
-          infraMap.set(v.vote_account, {
-            autonomousSystemNumber: v.autonomous_system_number,
-            dataCenterKey: v.data_center_key,
-            softwareClient: v.software_client,
-          })
-        );
-      }
-    } catch (error) {
-      console.error("Error fetching validators.app data:", error);
-    }
-  }
+  const [stakewizMap, sfdpMap, mainnetIdentityToVote, infraMap] =
+    await Promise.all([
+      fetchStakewizMap(needsStakewiz),
+      fetchSfdpMap(config),
+      loadMainnetIdentityToVote(config),
+      fetchInfraMap(config),
+    ]);
 
   return validators.map((v) => {
     const sfdpInfo = sfdpMap.get(v.identityPubkey);
