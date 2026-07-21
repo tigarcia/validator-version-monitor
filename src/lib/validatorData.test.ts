@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs/promises";
-import { loadEnrichedValidators, loadUnstakedVersionCounts, resolveBridgedName } from "./validatorData";
+import {
+  loadEnrichedValidators,
+  loadUnstakedVersionCounts,
+  resolveBridgedName,
+  clearEnrichmentCache,
+} from "./validatorData";
 import { Validator } from "../types/validator";
 
 vi.mock("fs/promises", () => ({
@@ -79,6 +84,7 @@ describe("resolveBridgedName", () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearEnrichmentCache();
 });
 
 describe("loadEnrichedValidators", () => {
@@ -342,23 +348,43 @@ describe("loadEnrichedValidators", () => {
     await promise;
   });
 
-  it("requests enrichment data with short-lived caching instead of an uncached fetch on every request", async () => {
+  it("serves a second call within the cache window from cache instead of re-fetching", async () => {
     mockReadFile.mockResolvedValue(JSON.stringify([rawValidator]));
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes("stakewiz")) return jsonResponse([]);
+      if (url.includes("stakewiz")) return jsonResponse([{ vote_identity: "vote1", name: "Alice" }]);
       if (url.includes("sfdp_participants")) return jsonResponse([]);
       if (url.includes("validators.app")) return jsonResponse([]);
       throw new Error(`unexpected fetch: ${url}`);
     });
 
-    await loadEnrichedValidators("mainnet");
+    const first = await loadEnrichedValidators("mainnet");
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(first[0].name).toBe("Alice");
 
-    for (const [url, options] of mockFetch.mock.calls as [string, RequestInit][]) {
-      expect(
-        options?.next && typeof (options.next as { revalidate?: number }).revalidate === "number",
-        `expected a next.revalidate option on fetch to ${url}`
-      ).toBe(true);
-    }
+    const second = await loadEnrichedValidators("mainnet");
+    expect(mockFetch).toHaveBeenCalledTimes(3); // no new fetches - served from cache
+    expect(second[0].name).toBe("Alice");
+  });
+
+  it("does not cache a failed enrichment fetch, so the next call retries", async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify([rawValidator]));
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("stakewiz")) {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve(null) });
+      }
+      if (url.includes("sfdp_participants")) return jsonResponse([]);
+      if (url.includes("validators.app")) return jsonResponse([]);
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const first = await loadEnrichedValidators("mainnet");
+    expect(first[0].name).toBe("private validator"); // Stakewiz fetch failed, no name available
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+
+    await loadEnrichedValidators("mainnet");
+    // SFDP and validators.app succeeded and are now served from cache; only
+    // the previously-failed Stakewiz fetch is retried.
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });
 
