@@ -32,11 +32,11 @@ export default function ValidatorTableRow({
 
   return (
     <tr className="border-b hover:bg-gray-50">
-      <td className="px-3 py-1 max-w-[200px] sm:max-w-[150px] truncate text-gray-900" title={validator.name}>
+      <td className="px-3 py-1 text-gray-900" title={validator.name}>
         {validator.name}
       </td>
       <td
-        className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate cursor-pointer hover:bg-gray-100 transition-colors text-gray-900"
+        className="px-3 py-1 font-mono cursor-pointer hover:bg-gray-100 transition-colors text-gray-900"
         title="Copy"
         onClick={() => handleCopy(validator.identityPubkey, "Identity")}
       >
@@ -48,7 +48,7 @@ export default function ValidatorTableRow({
         </div>
       </td>
       <td
-        className="px-3 py-1 font-mono max-w-[120px] sm:max-w-[80px] truncate hidden sm:table-cell cursor-pointer hover:bg-gray-100 transition-colors text-gray-900"
+        className="px-3 py-1 font-mono hidden sm:table-cell cursor-pointer hover:bg-gray-100 transition-colors text-gray-900"
         title="Copy"
         onClick={() => handleCopy(validator.voteAccountPubkey, "Vote Account")}
       >

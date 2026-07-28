@@ -751,7 +751,7 @@ export default function ValidatorTable({
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/{networkConfig.validatorsFile}</code> and refresh.</p>
       ) : (
-        <table className="min-w-full text-sm text-gray-900">
+        <table className="w-full table-fixed text-sm text-gray-900 [&_th]:whitespace-normal [&_th]:[overflow-wrap:anywhere] [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere]">
           <ValidatorTableHeader
             sortCfg={sortCfg}
             onSort={toggleSort}
