@@ -21,7 +21,7 @@ export default function FilterChipBar({
   showSfdpStake,
 }: FilterChipBarProps) {
   return (
-    <div className="md:hidden mb-3">
+    <div className="md:hidden sticky top-0 z-10 bg-white mb-3">
       <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1">
         <button
           onClick={onOpenSheet}

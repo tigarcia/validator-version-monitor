@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { useEffect } from "react";
 import { getAsnDisplay } from "../utils/asnLookup";
 import type { VersionGroupStat, UnstakedVersionGroupStat, StatItem } from "../types/filterStats";
 
@@ -75,6 +76,23 @@ export default function FilterBottomSheet({
   onClearAll,
   onExportCsv,
 }: FilterBottomSheetProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -103,7 +121,7 @@ export default function FilterBottomSheet({
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-5">
+            <div className="overflow-y-auto overscroll-contain flex-1 px-4 py-3 space-y-5">
               <section>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Version</h3>
