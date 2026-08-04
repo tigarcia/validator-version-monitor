@@ -267,6 +267,12 @@ export default function ValidatorTable({
     return list;
   }, [filtered, sortCfg]);
 
+  // Mobile list is always stake-descending, independent of sortCfg (no sorting UI on mobile).
+  const mobileSorted = useMemo(
+    () => [...filtered].sort((a, b) => Number(b.activatedStake) - Number(a.activatedStake)),
+    [filtered]
+  );
+
   const totalStake = validators.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
   const filteredStake = filtered.reduce((sum, v) => sum + Number(v.activatedStake || 0), 0);
   const pct = totalStake ? ((filteredStake / totalStake) * 100).toFixed(2) : "0.00";
@@ -863,7 +869,7 @@ export default function ValidatorTable({
             </table>
           </div>
           <div className="md:hidden">
-            {sorted.map((v) => (
+            {mobileSorted.map((v) => (
               <MobileValidatorRow
                 key={v.voteAccountPubkey}
                 validator={v}
