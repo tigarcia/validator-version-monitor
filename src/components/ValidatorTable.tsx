@@ -6,7 +6,7 @@ import ValidatorTableRow from "./ValidatorTableRow";
 import ValidatorTableHeader from "./ValidatorTableHeader";
 import CopyNotification from "./CopyNotification";
 import { getMinorVersionGroup, compareVersionsDesc } from "../utils/versionParser";
-import { getAsnDisplay, ASN_PROVIDERS } from "../utils/asnLookup";
+import { getAsnDisplay, getAsnProviderName } from "../utils/asnLookup";
 import { Network, NETWORK_CONFIGS } from "../lib/network";
 import { buildFilterQueryString } from "../utils/filterQueryString";
 
@@ -424,12 +424,6 @@ export default function ValidatorTable({
       return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
-  };
-
-  const getAsnProviderName = (asn: number | null): string => {
-    if (asn === null) return "Unknown";
-    const provider = ASN_PROVIDERS[asn];
-    return provider || "Unknown";
   };
 
   const downloadCSV = (csvContent: string, filename: string) => {

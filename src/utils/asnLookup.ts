@@ -62,3 +62,9 @@ export function getAsnDisplay(asn: number | null): string {
   const provider = ASN_PROVIDERS[asn];
   return provider ? `${provider} (${asn})` : asn.toString();
 }
+
+export function getAsnProviderName(asn: number | null): string {
+  if (asn === null) return "Unknown";
+  const provider = ASN_PROVIDERS[asn];
+  return provider || "Unknown";
+}
