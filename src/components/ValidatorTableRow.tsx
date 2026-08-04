@@ -3,7 +3,7 @@ import { copyToClipboard } from "../utils/copyToClipboard";
 import { Copy } from "lucide-react";
 import { getAsnDisplay } from "../utils/asnLookup";
 
-const LAMPORTS_PER_SOL = 10 ** 9;
+export const LAMPORTS_PER_SOL = 10 ** 9;
 
 interface ValidatorTableRowProps {
   validator: Validator;
