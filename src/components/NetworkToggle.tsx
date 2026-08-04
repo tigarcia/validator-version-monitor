@@ -9,6 +9,12 @@ const LABELS: Record<Network, string> = {
   devnet: "Devnet",
 };
 
+const SHORT_LABELS: Record<Network, string> = {
+  mainnet: "Main",
+  testnet: "Test",
+  devnet: "Dev",
+};
+
 export default function NetworkToggle({
   current,
   basePath = "/",
@@ -39,13 +45,14 @@ export default function NetworkToggle({
         <Link
           key={network}
           href={hrefFor(network)}
-          className={`px-4 py-2 transition-colors ${
+          className={`px-2.5 py-1.5 text-xs md:px-4 md:py-2 md:text-sm transition-colors ${
             current === network
               ? "bg-blue-500 text-white"
               : "bg-white text-gray-700 hover:bg-gray-100"
           }`}
         >
-          {LABELS[network]}
+          <span className="md:hidden">{SHORT_LABELS[network]}</span>
+          <span className="hidden md:inline">{LABELS[network]}</span>
         </Link>
       ))}
     </div>

@@ -21,10 +21,11 @@ export default async function Home({
   );
 
   return (
-    <main className="min-h-screen bg-gray-100 px-8 py-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Solana Validator Version Monitor
+    <main className="min-h-screen bg-gray-100 px-3 py-4 md:px-8">
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <h1 className="text-lg md:text-3xl font-bold text-gray-900 truncate">
+          <span className="md:hidden">Validator Monitor</span>
+          <span className="hidden md:inline">Solana Validator Version Monitor</span>
         </h1>
         <Suspense fallback={null}>
           <NetworkToggle current={network} />
