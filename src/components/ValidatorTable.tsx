@@ -9,6 +9,10 @@ import { getMinorVersionGroup, compareVersionsDesc } from "../utils/versionParse
 import { getAsnDisplay, getAsnProviderName } from "../utils/asnLookup";
 import { Network, NETWORK_CONFIGS } from "../lib/network";
 import { buildFilterQueryString } from "../utils/filterQueryString";
+import MobileValidatorRow from "./MobileValidatorRow";
+import FilterChipBar from "./FilterChipBar";
+import FilterBottomSheet from "./FilterBottomSheet";
+import { deriveActiveFilterChips, ActiveFilterChip } from "../utils/activeFilterChips";
 
 export default function ValidatorTable({
   initialData,
@@ -39,6 +43,8 @@ export default function ValidatorTable({
     isVisible: boolean;
     isError: boolean;
   }>({ message: "", isVisible: false, isError: false });
+
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const networkConfig = NETWORK_CONFIGS[network];
   const hasSfdp = networkConfig.sfdpKeyField !== null;
@@ -402,6 +408,54 @@ export default function ValidatorTable({
     });
   };
 
+  const removeVersionGroup = (group: string) => {
+    const groupStat = versionStats.groups.find((g) => g.groupName === group);
+    if (!groupStat) return;
+    setSelectedVersions((prev) => {
+      const newSet = new Set(prev);
+      groupStat.versionsInGroup.forEach((v) => newSet.delete(v));
+      return newSet;
+    });
+  };
+
+  const activeFilterChips = useMemo(
+    () =>
+      deriveActiveFilterChips({
+        versionGroups: versionStats.groups,
+        selectedVersions,
+        selectedClients,
+        selectedAsns,
+        selectedDataCenters,
+        sfdpFilter,
+        showUnstaked,
+        getAsnLabel: (asn) => (asn === "Unknown" ? "Unknown" : getAsnDisplay(Number(asn))),
+      }),
+    [versionStats.groups, selectedVersions, selectedClients, selectedAsns, selectedDataCenters, sfdpFilter, showUnstaked]
+  );
+
+  const handleRemoveChip = (chip: ActiveFilterChip) => {
+    switch (chip.type) {
+      case "versionGroup":
+        removeVersionGroup(chip.key);
+        break;
+      case "client":
+        toggleClient(chip.key);
+        break;
+      case "asn":
+        toggleAsn(chip.key);
+        break;
+      case "dataCenter":
+        toggleDataCenter(chip.key);
+        break;
+      case "sfdp":
+        setSfdpFilter("all");
+        break;
+      case "unstaked":
+        toggleUnstaked();
+        break;
+    }
+  };
+
   const clearAllFilters = () => {
     setSelectedVersions(new Set());
     setSfdpFilter("all");
@@ -492,7 +546,7 @@ export default function ValidatorTable({
 
   return (
     <div className="bg-white p-4 rounded-2xl shadow text-gray-900">
-      <div className="flex flex-wrap items-center gap-4 mb-4">
+      <div className="hidden md:flex flex-wrap items-center gap-4 mb-4">
         <button
           onClick={clearAllFilters}
           className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
@@ -570,8 +624,49 @@ export default function ValidatorTable({
         </button>
       </div>
 
+      <FilterChipBar
+        activeChips={activeFilterChips}
+        onRemoveChip={handleRemoveChip}
+        onOpenSheet={() => setSheetOpen(true)}
+        matchingStakePercentage={pct}
+        matchingCount={sorted.length}
+        sfdpStakePercentage={sfdpStakePercentage}
+        showSfdpStake={sfdpFilter !== "all"}
+      />
+
+      <FilterBottomSheet
+        isOpen={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        versionGroups={versionStats.groups}
+        selectedVersions={selectedVersions}
+        onToggleVersion={toggleVersion}
+        onToggleGroup={toggleGroup}
+        isGroupSelected={isGroupSelected}
+        isGroupPartiallySelected={isGroupPartiallySelected}
+        showUnstaked={showUnstaked}
+        onToggleUnstaked={toggleUnstaked}
+        unstakedGroups={unstakedVersionStats.groups}
+        unstakedTotalNodes={unstakedVersionStats.totalNodes}
+        hasInfrastructure={hasInfrastructure}
+        clientStats={infrastructureStats.clients}
+        selectedClients={selectedClients}
+        onToggleClient={toggleClient}
+        asnStats={infrastructureStats.asns}
+        selectedAsns={selectedAsns}
+        onToggleAsn={toggleAsn}
+        dataCenterStats={infrastructureStats.dataCenters}
+        selectedDataCenters={selectedDataCenters}
+        onToggleDataCenter={toggleDataCenter}
+        hasSfdp={hasSfdp}
+        sfdpStates={sfdpStates}
+        sfdpFilter={sfdpFilter}
+        onSfdpFilterChange={setSfdpFilter}
+        onClearAll={clearAllFilters}
+        onExportCsv={handleExportToCSV}
+      />
+
       {showVersionFilter && !showUnstaked && (
-        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+        <div className="hidden md:block bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {versionStats.groups.map((group) => {
               const isSelected = isGroupSelected(group.versionsInGroup);
@@ -633,7 +728,7 @@ export default function ValidatorTable({
       )}
 
       {showVersionFilter && showUnstaked && (
-        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+        <div className="hidden md:block bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
           <div className="text-sm text-gray-700 mb-3">
             <strong>{unstakedVersionStats.totalNodes.toLocaleString()}</strong> unstaked gossip nodes
           </div>
@@ -669,7 +764,7 @@ export default function ValidatorTable({
       )}
 
       {showInfrastructureFilter && hasInfrastructure && (
-        <div className="bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
+        <div className="hidden md:block bg-gray-50 border rounded-lg p-4 mb-4 transition-all duration-200">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Software Client Section */}
             <div>
@@ -745,25 +840,41 @@ export default function ValidatorTable({
       {sorted.length === 0 ? (
         <p className="text-center text-gray-500">No data found. Update <code>data/{networkConfig.validatorsFile}</code> and refresh.</p>
       ) : (
-        <table className="min-w-full text-sm text-gray-900">
-          <ValidatorTableHeader
-            sortCfg={sortCfg}
-            onSort={toggleSort}
-            showInfrastructure={showInfrastructure}
-          />
-          <tbody>
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <table className="min-w-full text-sm text-gray-900">
+              <ValidatorTableHeader
+                sortCfg={sortCfg}
+                onSort={toggleSort}
+                showInfrastructure={showInfrastructure}
+              />
+              <tbody>
+                {sorted.map((v) => (
+                  <ValidatorTableRow
+                    key={v.voteAccountPubkey}
+                    validator={v}
+                    totalStake={totalStake}
+                    onCopySuccess={handleCopySuccess}
+                    onCopyError={handleCopyError}
+                    showInfrastructure={showInfrastructure}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="md:hidden">
             {sorted.map((v) => (
-              <ValidatorTableRow
+              <MobileValidatorRow
                 key={v.voteAccountPubkey}
                 validator={v}
                 totalStake={totalStake}
+                hasInfrastructure={hasInfrastructure}
                 onCopySuccess={handleCopySuccess}
                 onCopyError={handleCopyError}
-                showInfrastructure={showInfrastructure}
               />
             ))}
-          </tbody>
-        </table>
+          </div>
+        </>
       )}
       <CopyNotification
         message={copyNotification.message}
